@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from ..config import SearchConfig, load_profile
+from ..config import SearchConfig, load_profile, scoring_api_key
 from ..db import AppStatus, Job, Run, Score, session_scope, utcnow
 from ..resume import get_resume_text
-from .matcher import Matcher, ScoringStats, to_score_row
+from .matcher import ScoringStats, to_score_row
+from .providers import build_scorer
 
 
 def pending_jobs(limit: int | None = None, *, rescore: bool = False) -> list[Job]:
@@ -45,18 +46,28 @@ def score_pending(
 
     profile = load_profile()
     resume_text = get_resume_text(profile.resume_file())
-    model = search_cfg.model.scoring
+    model_cfg = search_cfg.model
+    model = model_cfg.scoring
 
-    matcher = Matcher(resume_text, model=model, effort=search_cfg.model.effort)
+    matcher = build_scorer(resume_text, model_cfg, api_key=scoring_api_key(model_cfg))
 
-    use_batch = force_batch or (
-        not force_live and len(jobs) >= search_cfg.model.batch_threshold
+    # Batching is a Claude-only endpoint. Asking for it on another provider is
+    # a config mistake worth naming rather than silently scoring live at full
+    # price and reporting a 50% discount that never happened.
+    wants_batch = force_batch or (
+        not force_live and len(jobs) >= model_cfg.batch_threshold
     )
+    use_batch = wants_batch and getattr(matcher, "supports_batch", False)
+    if wants_batch and not use_batch:
+        emit(
+            f"Batch scoring is a Claude-only endpoint — {model_cfg.provider} "
+            "has no equivalent, so this run is live."
+        )
     stats.used_batch = use_batch
 
     emit(
-        f"Scoring {len(jobs)} job(s) with {model} "
-        f"(effort={search_cfg.model.effort}, {'batch' if use_batch else 'live'})"
+        f"Scoring {len(jobs)} job(s) with {model} via {model_cfg.provider} "
+        f"(effort={model_cfg.effort}, {'batch' if use_batch else 'live'})"
     )
 
     if use_batch:
@@ -93,7 +104,10 @@ def score_pending(
                 stats_json={
                     **stats.as_dict(),
                     "model": model,
-                    "estimated_cost_usd": round(stats.estimated_cost_usd(model), 4),
+                    "provider": model_cfg.provider,
+                    "estimated_cost_usd": round(
+                        stats.estimated_cost_usd(model, model_cfg.provider), 4
+                    ),
                 },
                 error="; ".join(stats.errors[:3]),
             )

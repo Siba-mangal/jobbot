@@ -400,6 +400,83 @@ sites:
 
 ---
 
+## Choosing a model provider
+
+Scoring runs on Claude by default, but it works with OpenAI, Gemini, or a
+model on your own machine. Set the provider in `config/search.yaml`:
+
+```yaml
+model:
+  provider: anthropic     # anthropic | openai | gemini | ollama | lmstudio | custom
+  scoring: claude-opus-5
+  effort: high
+```
+
+| `provider` | `scoring` example | Key (in `.env`) |
+|---|---|---|
+| `anthropic` | `claude-opus-5` | `ANTHROPIC_API_KEY` |
+| `openai` | `gpt-5` | `OPENAI_API_KEY` |
+| `gemini` | `gemini-2.5-pro` | `GEMINI_API_KEY` |
+| `ollama` | `qwen3.5:9b` | none — runs locally |
+| `lmstudio` | whatever is loaded | none — runs locally |
+| `custom` | any | set `api_key_env` |
+
+Everything except Claude goes through one OpenAI-compatible client, because
+that is the shape they all speak — including Gemini's compatibility endpoint,
+Ollama, LM Studio, vLLM and llama.cpp. For anything else, use `custom` and
+point `base_url` at it:
+
+```yaml
+model:
+  provider: custom
+  base_url: "http://192.168.1.50:8000/v1"
+  api_key_env: "MY_GATEWAY_TOKEN"    # omit if the endpoint needs no key
+  scoring: "my-model"
+```
+
+Structured output support is uneven across providers, so the client negotiates
+down a ladder — strict JSON schema, then JSON mode, then schema-in-the-prompt —
+and remembers where it landed. Whatever comes back is validated against
+`FitScore` regardless: a model claiming JSON mode is not the same as a model
+emitting valid JSON.
+
+### What you give up leaving Claude
+
+Only the Claude path has **prompt caching** and the **Batches API**. Everywhere
+else the resume is re-sent with every job at full price and there is no
+half-price batch, so a hosted non-Claude run costs meaningfully more per job.
+Asking for `--batch` on another provider says so rather than silently pricing
+a discount that never happened.
+
+### Running a model locally
+
+Local costs nothing per token and nothing leaves your machine. It is also
+**slow** — measured here, one posting took ~5.7 minutes on a 9B model on a
+laptop, so 40 jobs is most of a working day. Prefer a small instruct-tuned
+model over a large reasoning one; the reasoning is wasted because the schema
+already constrains the answer (the client switches it off where the endpoint
+understands how).
+
+The one thing that will bite you is the context window. Ollama ships a 4096
+default, and the rubric plus a resume is ~2.4k tokens before the job
+description is added — so scoring dies mid-object. Start it with more:
+
+```bash
+OLLAMA_CONTEXT_LENGTH=16384 ollama serve
+ollama pull qwen3.5:9b
+```
+
+```yaml
+model:
+  provider: ollama
+  scoring: qwen3.5:9b
+```
+
+If a run reports "ran out of room at N tokens", that is this — the error
+prints the numbers and the fix.
+
+---
+
 ## Cost
 
 Scoring uses `claude-opus-5` with the resume as a cached prompt prefix, so

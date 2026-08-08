@@ -112,26 +112,46 @@
       <summary>
         <span class="step-no {{ 'done' if ready.api_key_ok }}">{{ '✓' if ready.api_key_ok else '03' }}</span>
         <span class="step-head">
-          <span class="step-title">Claude API key</span>
+          <span class="step-title">Model access — {{ ready.provider_label }}</span>
           <span class="step-sub">
-            {{ 'Found — scoring is available' if ready.api_key_ok else 'Needed to score jobs against your resume' }}
+            {% if not ready.key_required %}
+              Local endpoint — no key needed
+            {% elif ready.api_key_ok %}
+              Key found — scoring is available
+            {% else %}
+              Needs {{ ready.key_env }} to score jobs against your resume
+            {% endif %}
           </span>
         </span>
         <span class="tag {{ '' if ready.api_key_ok else 'tag-warn' }}">{{ 'Ready' if ready.api_key_ok else 'Needed' }}</span>
       </summary>
 
       <div class="step-body">
-        {% if ready.api_key_ok %}
+        <p class="hint">
+          Scoring is pointed at <strong>{{ ready.provider_label }}</strong>
+          (<code>model.provider: {{ ready.provider }}</code> in
+          <code>config/search.yaml</code>). Change the provider there to use a
+          different one — Claude, OpenAI, Gemini, or a model running locally.
+        </p>
+
+        {% if not ready.key_required %}
           <p class="hint">
-            A key is available. It's read from the environment or a
-            <code>.env</code> file — never stored by this app.
+            This endpoint runs on your machine and authenticates with nothing,
+            so there is no key to set. Make sure the server is running and the
+            model named in <code>model.scoring</code> is pulled.
+          </p>
+        {% elif ready.api_key_ok %}
+          <p class="hint">
+            A key is available in <code>{{ ready.key_env }}</code>. It's read
+            from the environment or a <code>.env</code> file — never stored by
+            this app.
           </p>
         {% else %}
           <p class="hint">Create a file called <code>.env</code> in the project root containing:</p>
-          <pre class="console" style="height:auto">ANTHROPIC_API_KEY=sk-ant-...</pre>
+          <pre class="console" style="height:auto">{{ ready.key_env }}=...</pre>
           <p class="hint" style="margin-top:12px">
-            Then restart the server. Discovery and dry-run applies work without it;
-            only scoring needs it.
+            Then restart the server. Discovery and dry-run applies work without
+            it; only scoring needs it.
           </p>
         {% endif %}
       </div>

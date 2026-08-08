@@ -79,15 +79,31 @@ class ScoringStats:
         total = self.cache_read_tokens + self.cache_write_tokens
         return self.cache_read_tokens / total if total else 0.0
 
-    def estimated_cost_usd(self, model: str) -> float:
-        """Rough list-price estimate. Input/output rates per million tokens."""
+    def estimated_cost_usd(self, model: str, provider: str = "anthropic") -> float:
+        """Rough list-price estimate. Input/output rates per million tokens.
+
+        A model running on your own machine costs nothing per token, so a
+        local provider reports 0 rather than billing you at Claude's rates
+        for a llama running on your laptop.
+        """
+        if provider in ("ollama", "lmstudio", "custom"):
+            return 0.0
         rates = {
             "claude-opus-5": (5.0, 25.0),
             "claude-opus-4-8": (5.0, 25.0),
             "claude-sonnet-5": (3.0, 15.0),
             "claude-haiku-4-5": (1.0, 5.0),
+            "gpt-5": (1.25, 10.0),
+            "gpt-5-mini": (0.25, 2.0),
+            "gpt-4o": (2.5, 10.0),
+            "gpt-4o-mini": (0.15, 0.6),
+            "gemini-2.5-pro": (1.25, 10.0),
+            "gemini-2.5-flash": (0.3, 2.5),
         }
-        rate_in, rate_out = rates.get(model, (5.0, 25.0))
+        # Unknown hosted model: fall back to the configured provider's usual
+        # flagship rate rather than pretending it is free.
+        default = (5.0, 25.0) if provider == "anthropic" else (1.25, 10.0)
+        rate_in, rate_out = rates.get(model, default)
         cost = (
             self.input_tokens * rate_in
             + self.cache_write_tokens * rate_in * 1.25
@@ -114,6 +130,9 @@ class ScoringStats:
 
 
 class Matcher:
+    #: Only the native Claude path has a half-price batch endpoint.
+    supports_batch = True
+
     def __init__(
         self,
         resume_text: str,

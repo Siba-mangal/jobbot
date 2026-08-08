@@ -23,9 +23,9 @@ from ..config import (
     CONFIG_DIR,
     DATA_DIR,
     Profile,
-    anthropic_api_key,
     load_profile,
     load_search_config,
+    scoring_api_key,
 )
 from ..db import Job, Run, SiteState, utcnow
 from ..scrapers.registry import SCRAPERS
@@ -130,6 +130,14 @@ class Readiness:
     resume_name: str
     api_key_ok: bool
     any_site_connected: bool
+    #: Which provider scoring is pointed at, and where its key comes from.
+    provider: str = "anthropic"
+    provider_label: str = "Claude"
+    key_env: str = "ANTHROPIC_API_KEY"
+    #: False for a local endpoint, which authenticates with nothing. Without
+    #: this the Setup page tells someone running Ollama that they are missing
+    #: a key they will never need.
+    key_required: bool = True
 
     @property
     def can_discover(self) -> bool:
@@ -155,13 +163,23 @@ def readiness() -> Readiness:
         profile, missing, resume = None, [f"profile.yaml is invalid: {exc}"], None
 
     resume_ok = bool(resume and resume.exists())
+
+    model_cfg = load_search_config().model
+    key_env = model_cfg.key_env()
+    has_key = bool(scoring_api_key(model_cfg))
+
     return Readiness(
         profile_ok=profile is not None and not missing,
         profile_missing=[m for m in missing if "resume" not in m.lower()],
         resume_ok=resume_ok,
         resume_name=resume.name if resume_ok else "",
-        api_key_ok=bool(anthropic_api_key()),
+        # A local endpoint needs no credential, so it is "ok" by default.
+        api_key_ok=has_key or not model_cfg.needs_key(),
         any_site_connected=any(has_profile(site) for site in SCRAPERS),
+        provider=model_cfg.provider,
+        provider_label=model_cfg.preset["label"],
+        key_env=key_env or "",
+        key_required=model_cfg.needs_key(),
     )
 
 
