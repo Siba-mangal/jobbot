@@ -82,6 +82,9 @@ def written(env) -> dict:
     return yaml.safe_load((env / "search.yaml").read_text())
 
 
+#: The normal path. `confirm_replace` is part of it because the fixture's
+#: config holds extra queries, and saving over those is gated — see the
+#: destructive-save section at the bottom, which posts NO_CONFIRM instead.
 FORM = {
     "keywords": "platform engineer",
     "location": "Remote",
@@ -90,7 +93,10 @@ FORM = {
     "excludes": "intern, sales, recruiter",
     "boards": ["instahyre", "cutshort"],
     "then": "save",
+    "confirm_replace": "yes",
 }
+
+NO_CONFIRM = {k: v for k, v in FORM.items() if k != "confirm_replace"}
 
 
 # ----------------------------------------------------------------------
@@ -239,3 +245,57 @@ def test_run_discover_starts_a_task_and_redirects(client, monkeypatch):
 def test_save_only_stays_on_the_search_page(client):
     response = client.post("/search", data=FORM)
     assert response.headers["location"].startswith("/search")
+
+
+# ----------------------------------------------------------------------
+# The destructive-save gate
+#
+# Added after a real loss: "Run discover →" is the primary button on this
+# screen, and clicking it replaced a hand-built set of LinkedIn freshness
+# queries. The banner naming them was already there — it just did not stop
+# anything. Irreversible edits need a second deliberate act, the same rule
+# the apply gate follows.
+
+
+def test_saving_over_other_queries_is_refused_without_confirmation(client, env):
+    before = written(env)
+    response = client.post("/search", data=NO_CONFIRM)
+    assert response.status_code == 303
+    assert "/search?error=" in response.headers["location"]
+    assert written(env) == before, "config must be untouched when the gate refuses"
+
+
+def test_the_refusal_says_how_many_would_be_lost(client):
+    response = client.post("/search", data=NO_CONFIRM)
+    assert "replaces+2+other+queries" in response.headers["location"].replace("%20", "+")
+
+
+def test_confirming_lets_the_save_through(client, env):
+    response = client.post("/search", data=FORM)
+    assert response.headers["location"].startswith("/search?saved")
+    assert written(env)["review"]["min_score"] == 72
+
+
+def test_run_discover_is_gated_too(client, env, monkeypatch):
+    """The destructive half rides on the primary button — gate that path too."""
+    from jobbot.web import app as app_mod
+
+    started = {}
+    monkeypatch.setattr(app_mod.TASKS, "start", lambda args, label: started.update(args=args))
+    before = written(env)
+    response = client.post("/search", data={**NO_CONFIRM, "then": "discover"})
+    assert "/search?error=" in response.headers["location"]
+    assert not started, "no run may start off a refused save"
+    assert written(env) == before
+
+
+def test_no_gate_when_nothing_would_be_lost(client, env):
+    """Once collapsed to the shared sweep, saving is not destructive."""
+    client.post("/search", data=FORM)
+    response = client.post("/search", data={**NO_CONFIRM, "min_score": "80"})
+    assert response.headers["location"].startswith("/search?saved")
+    assert written(env)["review"]["min_score"] == 80
+
+
+def test_the_gate_renders_as_a_checkbox(client):
+    assert 'name="confirm_replace"' in client.get("/search").text

@@ -690,7 +690,7 @@ def _extra_queries(cfg, primary: SearchQuery) -> list[dict]:
 
 
 @app.get("/search")
-def search_page(request: Request, saved: str = ""):
+def search_page(request: Request, saved: str = "", error: str = ""):
     cfg = load_search_config()
     primary = _primary_query(cfg)
 
@@ -748,6 +748,7 @@ def search_page(request: Request, saved: str = ""):
                 f"posted within {_fresh_key(primary)} · score ≥ {cfg.review.min_score}"
             ),
             "saved_note": saved,
+            "error": error,
         },
     )
 
@@ -762,8 +763,27 @@ def save_search(
     excludes: str = Form(default=""),
     boards: list[str] = Form(default=[]),
     then: str = Form(default=""),
+    confirm_replace: str = Form(default=""),
 ):
     cfg = load_search_config()
+
+    # Saving collapses every site to the one shared sweep. When that would
+    # discard other queries it is not a reversible edit, so it needs a second
+    # deliberate act — the same rule the apply gate follows. A banner alone
+    # was not enough: "Run discover →" is the primary button on this screen,
+    # and clicking it quietly replaced a hand-built set of LinkedIn freshness
+    # queries for someone who never scrolled past it.
+    losing = _extra_queries(cfg, _primary_query(cfg))
+    if losing and confirm_replace != "yes":
+        return RedirectResponse(
+            "/search?error=" + _q(
+                f"Saving replaces {len(losing)} other quer"
+                f"{'y' if len(losing) == 1 else 'ies'}. "
+                "Tick the confirmation to go ahead."
+            ),
+            status_code=303,
+        )
+
     hours = FRESH_CHOICES.get(fresh)
     query = SearchQuery(
         keywords=keywords.strip(),

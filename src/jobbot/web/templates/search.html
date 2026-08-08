@@ -17,6 +17,7 @@
     {% if saved_note %}
       <div class="banner ok">Saved to <code>config/search.yaml</code>.</div>
     {% endif %}
+    {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
 
     <hr class="hr">
 
@@ -97,6 +98,10 @@
             <span class="mono" style="font-size:11px;color:var(--ink-70)">{{ e.site }} · {{ e.label }}</span>
           {% endfor %}
         </div>
+        <label class="check" style="margin-top:12px;border-top-color:var(--accent)">
+          <input type="checkbox" name="confirm_replace" value="yes">
+          Yes, replace them with the sweep above.
+        </label>
       </div>
     {% endif %}
 

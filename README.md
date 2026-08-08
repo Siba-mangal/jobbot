@@ -21,6 +21,59 @@ Nothing is ever submitted without passing through it, and `jobbot apply` is a
 
 ---
 
+## The website
+
+`uv run jobbot serve` → `http://localhost:8000`. Four screens carry the
+pipeline; Setup, Needs input and Manual sit behind them.
+
+### Home — where everything stands
+
+![Home](docs/screenshots/home.jpg)
+
+The pipeline as a whole: what is waiting on you, what is queued, what has been
+sent. The donut and the figures beside it are the same numbers — identity is
+never colour alone.
+
+### Search — define the sweep once
+
+![Search](docs/screenshots/search.jpg)
+
+Keywords, boards, freshness window, score floor, and the prefilter list that
+drops postings before they ever cost a token. The sidebar estimates the sweep
+before you run it.
+
+This screen models **one** sweep shared across every board, while
+`config/search.yaml` models a query list per site — so saving replaces those
+lists. When that would discard anything, the screen names each query it is
+about to drop and will not save until you confirm. That gate exists because it
+once ate a hand-built pair of LinkedIn freshness queries with only a banner to
+warn about it.
+
+### Review — the gate
+
+![Review](docs/screenshots/review.jpg)
+
+Every posting with its fit score, the model's reasoning behind a disclosure,
+and approve/skip. Freshness chips filter to the last hour, day or week, and
+each chip's count is guaranteed to equal the rows it opens.
+
+**Nothing reaches an employer without passing through here.**
+
+### Run — discover, score, apply
+
+![Run](docs/screenshots/run.jpg)
+
+The three stages, live streamed output from the same CLI the terminal runs,
+and the safety limits actually in force. Applying is a **dry run** until both
+switches in *Submit for real* are on — it fills every field, screenshots the
+page, and stops at the submit button.
+
+> Screenshots are the real dashboard against a live database. The Applications
+> screen is not shown: it lists the employers a run actually applied to, which
+> is nobody else's business.
+
+---
+
 ## Before you start
 
 **LinkedIn's User Agreement prohibits automated scraping and automated
@@ -288,7 +341,7 @@ tests/           447 tests, no network
 
 ---
 
-## The website
+## Pages, and how the interface is built
 
 | Page | What it's for |
 |---|---|
@@ -302,13 +355,13 @@ tests/           447 tests, no network
 
 The interface is built on a flat, architectural design system — Archivo, a
 single red accent, zero corner radius, and 2px rules doing the organising.
-The webfont is vendored under `src/jobbot/web/static/`, not linked from a CDN,
-so the dashboard still renders with no network.
+Colours are measured rather than picked: the poster field drops to a deeper
+step of the same ramp in light mode because ground-on-accent is 3.18:1 there,
+under the floor for body copy.
 
-**Search** writes `config/search.yaml`. It models *one* sweep shared across
-every board, while the file models a query list per site — so saving replaces
-those lists. The screen names exactly what it is about to drop before you
-save it.
+The webfont is vendored under `src/jobbot/web/static/`, not linked from a CDN,
+so the dashboard still renders with no network — there is a test asserting no
+external resource is referenced.
 
 It binds to `127.0.0.1` and has no authentication, which is fine for a local
 tool and **not** fine on a shared or public machine — it shows your resume
@@ -419,6 +472,10 @@ happened.
   shape.
 - **Freshness counts match what they show** — a chip reading "last hour 29"
   must open a page with 29 rows.
+- **A destructive save is gated** — saving the Search screen over other
+  queries names them and requires a confirmation, and a refused save starts
+  no run. A banner that only warns is not a gate; this one was added after a
+  real loss.
 - **Cross-site dedupe** — the same role on two boards collapses to one row.
 
 ### Calibrating a scraper
