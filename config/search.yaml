@@ -1,88 +1,64 @@
 # Where to look, what to keep, and how hard to push each site.
-# Edit freely — this file is read on every run.
+#
+# Edited from the Search screen as well as by hand — this file is read on
+# every run. PyYAML cannot round-trip comments, so the guidance here is
+# regenerated on each save rather than preserved. Hand-written comments will
+# not survive a save from the UI.
 
 model:
-  # Model used for scoring job descriptions against your resume.
-  # claude-opus-5 is the most accurate. claude-sonnet-5 / claude-haiku-4-5
-  # are cheaper drop-in swaps if you scale volume up.
-  scoring: claude-opus-5
-  # Batch API kicks in above this many unscored jobs (50% cheaper, slower).
+  provider: openai
+  scoring: gpt-5.6-terra
   batch_threshold: 30
-  # low | medium | high | xhigh | max. Controls how hard the model thinks
-  # about each posting. `medium` roughly halves cost at some accuracy cost.
   effort: high
-
 sites:
   instahyre:
     enabled: true
     daily_cap: 100
     queries:
-      - keywords: "backend engineer"
-        location: "Bangalore"
-      - keywords: "python developer"
-        location: "Remote"
-
+    - keywords: software developer
+      location: Bangalore, Hyderabad
+      remote: false
+      posted_within_hours: 1
+      label: Shared sweep — 1h
   cutshort:
-    enabled: true
+    enabled: false
     daily_cap: 100
     queries:
-      - keywords: "backend engineer"
-        location: "Bangalore"
-
+    - keywords: software developer
+      location: Bangalore, Hyderabad
+      remote: false
+      posted_within_hours: 1
+      label: Shared sweep — 1h
+  # WARNING: LinkedIn's User Agreement prohibits automated access, and they
+  # detect and restrict accounts that do it. There is no compliant way to
+  # scrape or auto-apply here. Keep the cap low — every extra request is
+  # risk — or set enabled: false.
   linkedin:
-    # ⚠️  LinkedIn's User Agreement prohibits automated access, and they
-    # detect and restrict accounts that do it. There is no compliant way to
-    # scrape or auto-apply here — this is enabled by explicit choice, not
-    # because it's allowed. Keep the cap low: every extra request is risk,
-    # and freshness runs are frequent by nature.
     enabled: true
     daily_cap: 40
     queries:
-      # The narrow window first: a 1-hour sweep is the point of running often,
-      # and getting in early on a posting is most of the advantage.
-      - label: "Fresh — last hour"
-        keywords: "backend engineer"
-        location: "India"
-        posted_within_hours: 1
-      - label: "Fresh — last hour (remote)"
-        keywords: "backend engineer"
-        location: "India"
-        remote: true
-        posted_within_hours: 1
-      - label: "Today — last 24 hours"
-        keywords: "backend engineer"
-        location: "India"
-        posted_within_hours: 24
-
-# Cheap rule-based filtering applied BEFORE any LLM call. Anything caught
-# here never costs a token.
+    - keywords: software developer
+      location: Bangalore, Hyderabad
+      remote: false
+      posted_within_hours: 1
+      label: Shared sweep — 1h
 prefilter:
-  # Drop postings whose title contains any of these (case-insensitive).
   exclude_title_keywords:
-    - intern
-    - internship
-    - "sales"
-    - "business development"
-  # Drop postings from these companies entirely.
+  - intern
+  - internship
+  - sales
+  - business development
   exclude_companies: []
-  # Drop postings whose location matches none of these substrings.
-  # Empty list = accept any location.
   allow_locations:
-    - remote
-    - bangalore
-    - bengaluru
-    - hyderabad
-    - india
-  # Drop postings requiring more years than this (parsed from the JD, best effort).
+  - remote
+  - bangalore
+  - bengaluru
+  - hyderabad
+  - india
   max_years_required: 12
-
-# Only jobs at or above this score appear in the default dashboard view.
 review:
-  min_score: 60
-
-# Safety limits applied to the applying stage.
+  min_score: 40
 apply:
   max_per_day: 20
   max_per_company_per_week: 3
-  # Pause a site for 24h after this many consecutive failures.
   failure_circuit_breaker: 3
