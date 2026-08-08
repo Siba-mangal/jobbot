@@ -143,9 +143,12 @@ class TestProfileEditing:
         # A four-option popup that covers the page is the wrong control; all
         # four choices should be visible at once.
         text = client.get("/setup").text
-        assert 'class="segmented"' in text
+        # Pinned on the control's behaviour, not the class that styles it:
+        # four radios in a radiogroup, and specifically not a <select>.
+        assert text.count('type="radio" id="wm-') == 4
         assert text.count('name="preferred_work_mode"') == 4
         assert 'role="radiogroup"' in text
+        assert '<select name="preferred_work_mode"' not in text
 
     def test_saved_work_mode_comes_back_checked(self, client):
         client.post("/setup/profile", data={**PROFILE_FORM, "preferred_work_mode": "onsite"})

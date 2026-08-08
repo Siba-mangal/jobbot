@@ -3,129 +3,145 @@
 {% block title %}Applications — jobbot{% endblock %}
 
 {% block content %}
+<div class="screen">
+  <div class="kicker">Step 04 — Evidence</div>
+  <h1 class="title-lg" style="margin:0 0 6px">Applications</h1>
+  <p style="margin:0 0 20px;font-size:13px;color:var(--ink-70);max-width:70ch">
+    <strong>Sent</strong> means the application reached the employer and a
+    confirmation was seen. If submit was clicked and no confirmation appeared,
+    it is marked failed rather than assumed — open the screenshot and check.
+  </p>
 
-<div class="bar">
-  <a href="/applications?show=all"     class="chip {{ 'ok' if show == 'all' }}">All</a>
-  <a href="/applications?show=sent"    class="chip {{ 'ok' if show == 'sent' }}">Sent</a>
-  <a href="/applications?show=pending" class="chip {{ 'ok' if show == 'pending' }}">Not sent</a>
-  <span class="company" style="margin-left:.5rem">
-    <strong>{{ sent_total }}</strong> actually sent to employers
-  </span>
-</div>
-
-{% if never_tried %}
-  <div class="banner warn">
-    <strong>{{ never_tried }}</strong> job{{ 's' if never_tried != 1 }} approved but never attempted.
-    Approving only queues a job — go to <a href="/run">Run</a> and start an apply run.
+  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:20px">
+    <div class="seg">
+      {% for key, label in [('all', 'All'), ('sent', 'Sent'), ('pending', 'Not sent')] %}
+        <a class="seg-opt {{ 'on' if show == key }}" href="/applications?show={{ key }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <span class="mono" style="font-size:12px;color:var(--ink-55)">
+      <strong>{{ sent_total }}</strong> actually sent to employers
+    </span>
   </div>
-{% endif %}
 
-{% if not rows %}
-  <div class="empty">
-    <p>No application attempts yet.</p>
-    <p>Approve jobs on <a href="/review">Review</a>, then run apply from <a href="/run">Run</a>.</p>
-  </div>
-{% else %}
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Role</th>
-          <th style="width:11rem">Outcome</th>
-          <th style="width:10rem">When</th>
-          <th style="width:7rem">Evidence</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for r in rows %}
-        {% set job = r.job %}{% set app = r.app %}
-        {% set label, tone = r.state %}
-        <tr>
-          <td>
-            <div class="title"><a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a></div>
-            <div class="company">
-              {{ job.company }}
-              {% if job.score %} · score {{ job.score.fit_score }}{% endif %}
-              {% if app.method %} · via {{ app.method }}{% endif %}
-              {% if app.attempts > 1 %} · {{ app.attempts }} attempts{% endif %}
-            </div>
+  {% if never_tried %}
+    <div class="note" style="margin-bottom:20px">
+      <b>{{ never_tried }} job{{ 's' if never_tried != 1 }} approved but never attempted</b>
+      <span>
+        Approving only queues a job — go to <a href="/run">Run</a> and start an
+        apply run.
+      </span>
+    </div>
+  {% endif %}
 
-            <details class="detail">
-              <summary>details</summary>
-              <div>
-                {% if app.error %}
-                  <p class="summary" style="color:var(--bad)">{{ app.error }}</p>
-                {% endif %}
+  {% if not rows %}
+    <div class="empty" style="padding-left:0">
+      <p>No application attempts yet.</p>
+      <p>Approve jobs on <a href="/review">Review</a>, then run apply from <a href="/run">Run</a>.</p>
+    </div>
+  {% else %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th style="width:150px">Outcome</th>
+            <th style="width:140px">When</th>
+            <th style="width:130px">Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in rows %}
+          {% set job = r.job %}{% set app = r.app %}
+          {% set label, tone = r.state %}
+          <tr>
+            <td>
+              <div style="font-weight:800">
+                <a href="{{ job.url }}" target="_blank" rel="noopener"
+                   style="color:var(--ink);text-decoration:none">{{ job.title }}</a>
+              </div>
+              <div class="mono" style="font-size:12px;color:var(--ink-55)">
+                {{ job.company }}
+                {%- if job.score %} · score {{ job.score.fit_score }}{% endif %}
+                {%- if app.method %} · via {{ app.method }}{% endif %}
+                {%- if app.attempts > 1 %} · {{ app.attempts }} attempts{% endif %}
+              </div>
 
-                {% if app.pending_questions %}
-                  <h4 style="margin:.5rem 0 .2rem; font-size:.74rem; text-transform:uppercase;
-                             letter-spacing:.06em; color:var(--warn)">Waiting on you</h4>
-                  <ul style="margin:0; padding-left:1.1rem; font-size:.88rem">
-                    {% for q in app.pending_questions %}<li>{{ q.question }}</li>{% endfor %}
-                  </ul>
-                  <p style="margin:.5rem 0 0"><a href="/needs-input">Answer these →</a></p>
-                {% endif %}
+              <details class="detail">
+                <summary>details</summary>
+                <div>
+                  {% if app.error %}
+                    <p style="font-size:12px;color:var(--tint-fg);background:var(--tint);padding:8px 10px;margin:8px 0">{{ app.error }}</p>
+                  {% endif %}
 
-                {% if app.answers_json %}
-                  <h4 style="margin:.7rem 0 .2rem; font-size:.74rem; text-transform:uppercase;
-                             letter-spacing:.06em; color:var(--muted)">
-                    {{ 'Answers submitted' if r.sent else 'Answers that would be submitted' }}
-                  </h4>
-                  <div class="table-wrap" style="border:0">
-                    <table style="min-width:auto">
+                  {% if app.pending_questions %}
+                    <div class="eyebrow" style="color:var(--accent);margin:10px 0 4px">Waiting on you</div>
+                    <ul style="margin:0;padding-left:16px;font-size:12px">
+                      {% for q in app.pending_questions %}<li>{{ q.question }}</li>{% endfor %}
+                    </ul>
+                    <p style="margin:8px 0 0"><a href="/needs-input">Answer these →</a></p>
+                  {% endif %}
+
+                  {% if app.answers_json %}
+                    <div class="eyebrow" style="margin:14px 0 4px">
+                      {{ 'Answers submitted' if r.sent else 'Answers that would be submitted' }}
+                    </div>
+                    <table style="font-size:12px">
                       <tbody>
                       {% for q, a in app.answers_json.items() %}
-                        <tr><td style="width:16rem; color:var(--muted)">{{ q }}</td><td>{{ a }}</td></tr>
+                        <tr>
+                          <td style="width:16rem;color:var(--ink-55)">{{ q }}</td>
+                          <td>{{ a }}</td>
+                        </tr>
                       {% endfor %}
                       </tbody>
                     </table>
-                  </div>
-                {% endif %}
+                  {% endif %}
 
-                {% if not app.answers_json and not app.pending_questions %}
-                  <p class="company" style="font-size:.85rem">
-                    This board has no form — your profile is already on file, so
-                    applying is a single click with nothing to fill in.
-                  </p>
-                {% endif %}
-              </div>
-            </details>
-          </td>
+                  {% if not app.answers_json and not app.pending_questions %}
+                    <p style="font-size:12px;color:var(--ink-55);margin:8px 0 0">
+                      This board has no form — your profile is already on file, so
+                      applying is a single click with nothing to fill in.
+                    </p>
+                  {% endif %}
+                </div>
+              </details>
+            </td>
 
-          <td>
-            <span class="chip {{ tone }}">{{ label }}</span>
-            {% if app.dry_run and not r.sent %}
-              <div class="company" style="font-size:.78rem; margin-top:.25rem">dry run</div>
-            {% endif %}
-          </td>
+            <td>
+              <span class="tag {{ {'ok': 'tag-accent', 'warn': 'tag-warn', 'bad': 'tag-bad'}.get(tone, 'tag-neutral') }}">{{ label }}</span>
+              {% if app.dry_run and not r.sent %}
+                <div class="mono" style="font-size:11px;color:var(--ink-55);margin-top:4px">dry run</div>
+              {% endif %}
+            </td>
 
-          <td class="company">
-            {% if app.submitted_at and r.sent %}
-              {{ app.submitted_at.strftime('%b %d, %H:%M') }}
-            {% elif app.updated_at %}
-              {{ app.updated_at.strftime('%b %d, %H:%M') }}
-            {% else %}—{% endif %}
-          </td>
+            <td class="mono" style="font-size:12px;color:var(--ink-60)">
+              {% if app.submitted_at and r.sent %}{{ app.submitted_at.strftime('%b %d, %H:%M') }}
+              {% elif app.updated_at %}{{ app.updated_at.strftime('%b %d, %H:%M') }}
+              {% else %}—{% endif %}
+            </td>
 
-          <td>
-            {% if r.evidence %}
-              <a href="/evidence/{{ r.evidence }}" target="_blank" rel="noopener">screenshot</a>
-            {% else %}
-              <span class="company">—</span>
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+            <td>
+              {% if r.evidence %}
+                <a class="btn-ghost" href="/evidence/{{ r.evidence }}" target="_blank" rel="noopener">screenshot</a>
+              {% else %}<span style="color:var(--ink-45)">—</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
 
-  <p class="company" style="margin-top:.9rem; font-size:.86rem">
-    <strong>Sent</strong> means the application actually reached the employer and
-    the confirmation was seen. A <strong>dry run</strong> fills the form and stops —
-    nothing is sent. If a submit was clicked but no confirmation appeared, it's
-    marked <strong>Failed</strong> rather than assumed successful, so open the
-    screenshot and check.
-  </p>
-{% endif %}
+<style>
+  details.detail { margin-top: 8px; }
+  details.detail summary {
+    cursor: pointer; color: var(--ink-55); font-size: 11px;
+    letter-spacing: .08em; text-transform: uppercase; list-style: none;
+  }
+  details.detail summary::-webkit-details-marker { display: none; }
+  details.detail summary::before { content: "▸ "; }
+  details.detail[open] summary::before { content: "▾ "; }
+  details.detail table td { border-bottom: 1px solid var(--line-soft); padding: 6px 8px 6px 0; }
+</style>
 {% endblock %}

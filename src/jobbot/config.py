@@ -193,6 +193,44 @@ def load_search_config() -> SearchConfig:
     return SearchConfig.model_validate(_read_yaml(CONFIG_DIR / "search.yaml"))
 
 
+_SEARCH_HEADER = """\
+# Where to look, what to keep, and how hard to push each site.
+#
+# Edited from the Search screen as well as by hand — this file is read on
+# every run. PyYAML cannot round-trip comments, so the guidance here is
+# regenerated on each save rather than preserved. Hand-written comments will
+# not survive a save from the UI.
+
+"""
+
+# Re-emitted next to the site key on every write. Regenerating it rather than
+# preserving it is the point: the warning cannot be lost, whether by editing
+# the file or by saving over it from the browser.
+_LINKEDIN_NOTE = """\
+  # WARNING: LinkedIn's User Agreement prohibits automated access, and they
+  # detect and restrict accounts that do it. There is no compliant way to
+  # scrape or auto-apply here. Keep the cap low — every extra request is
+  # risk — or set enabled: false.
+"""
+
+
+def save_search_config(cfg: SearchConfig) -> None:
+    """Write search.yaml back to disk and drop the cached copy.
+
+    The cache invalidation is the part that bites if forgotten:
+    `load_search_config` is `lru_cache`d for the process lifetime, so a save
+    without it leaves every later reader — including the running server —
+    serving the values from before the edit.
+    """
+    body = yaml.safe_dump(
+        cfg.model_dump(exclude_none=True), sort_keys=False, allow_unicode=True
+    )
+    if "\n  linkedin:\n" in body:
+        body = body.replace("\n  linkedin:\n", "\n" + _LINKEDIN_NOTE + "  linkedin:\n", 1)
+    (CONFIG_DIR / "search.yaml").write_text(_SEARCH_HEADER + body)
+    load_search_config.cache_clear()
+
+
 @lru_cache(maxsize=1)
 def load_profile() -> Profile:
     path = CONFIG_DIR / "profile.yaml"

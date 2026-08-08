@@ -3,160 +3,224 @@
 {% block title %}Review — jobbot{% endblock %}
 
 {% block content %}
-<form class="bar" method="get" action="/review">
-  <select name="status">
-    <option value="pending" {{ 'selected' if filters.status == 'pending' }}>still open</option>
-    {% for s in statuses %}
-      <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s.replace('_', ' ') }}</option>
-    {% endfor %}
-    <option value="all" {{ 'selected' if filters.status == 'all' }}>all</option>
-  </select>
-
-  <select name="source">
-    <option value="">any source</option>
-    {% for s in sources %}
-      <option value="{{ s }}" {{ 'selected' if filters.source == s }}>{{ s }}</option>
-    {% endfor %}
-  </select>
-
-  <select name="verdict">
-    <option value="">any verdict</option>
-    {% for v in ['strong', 'possible', 'weak', 'disqualified'] %}
-      <option value="{{ v }}" {{ 'selected' if filters.verdict == v }}>{{ v }}</option>
-    {% endfor %}
-  </select>
-
-  <label class="chip">min score
-    <input type="number" name="min_score" value="{{ filters.min_score }}" min="0" max="100" style="width:4.5rem">
-  </label>
-
-  <select name="sort">
-    <option value="score" {{ 'selected' if filters.sort == 'score' }}>by score</option>
-    <option value="posted" {{ 'selected' if filters.sort == 'posted' }}>newest posted</option>
-    <option value="recent" {{ 'selected' if filters.sort == 'recent' }}>recently found</option>
-    <option value="company" {{ 'selected' if filters.sort == 'company' }}>by company</option>
-  </select>
-
-  <input type="hidden" name="fresh" value="{{ filters.fresh }}">
-  <button class="ghost" type="submit">Filter</button>
-</form>
-
-{# Freshness is a separate row: it's the thing you reach for most often on a
-   fast-moving board, and burying it in the filter row costs a click.
-
-   These links deliberately carry only source/verdict — NOT status or
-   min_score. The counts beside them are of every still-open job in the
-   window, so passing the scored-only default or the score threshold through
-   would open a page showing fewer jobs than the chip just promised. #}
 {% set qs = '&source=' ~ filters.source ~ '&verdict=' ~ filters.verdict %}
-<div class="bar" style="margin-top:-.4rem">
-  <span class="company" style="font-size:.82rem">Posted:</span>
-  {% for key, label in [('1h', 'last hour'), ('24h', 'last 24h'), ('7d', 'last 7d')] %}
-    <a class="chip {{ 'ok' if filters.fresh == key }}" href="/review?fresh={{ key }}{{ qs }}">
-      {{ label }} <strong>{{ fresh_counts[key] }}</strong>
-    </a>
-  {% endfor %}
-  {% if filters.fresh %}
-    <a class="chip" href="/review{{ ('?' ~ qs[1:]) if qs|length > 1 }}">clear ✕</a>
-  {% endif %}
+
+<div class="screen" style="padding-bottom:16px;border-bottom:2px solid var(--line)">
+  <div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap">
+    <div>
+      <div class="kicker">Step 02 — Decide</div>
+      <h1 class="title-lg">Review queue</h1>
+    </div>
+
+    {# Status tabs. Link-driven so each view is a real URL you can bookmark
+       and the back button behaves. #}
+    <div class="seg" style="margin-left:auto">
+      {% for key, label in [('pending', 'Open'), ('new', 'New'), ('scored', 'Scored'), ('approved', 'Approved')] %}
+        <a class="seg-opt {{ 'on' if filters.status == key }}"
+           href="/review?status={{ key }}&sort={{ filters.sort }}&fresh={{ filters.fresh }}{{ qs }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <form class="bar" method="get" action="/review"
+        style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px">
+    <input type="hidden" name="fresh" value="{{ filters.fresh }}">
+    <select name="status" style="width:auto;min-width:9rem">
+      <option value="pending" {{ 'selected' if filters.status == 'pending' }}>still open</option>
+      {% for s in statuses %}
+        <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s.replace('_', ' ') }}</option>
+      {% endfor %}
+      <option value="all" {{ 'selected' if filters.status == 'all' }}>all</option>
+    </select>
+    <select name="source" style="width:auto;min-width:8rem">
+      <option value="">any source</option>
+      {% for s in sources %}<option value="{{ s }}" {{ 'selected' if filters.source == s }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select name="verdict" style="width:auto;min-width:8rem">
+      <option value="">any verdict</option>
+      {% for v in ['strong', 'possible', 'weak', 'disqualified'] %}
+        <option value="{{ v }}" {{ 'selected' if filters.verdict == v }}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    <label class="lbl" style="margin:0;display:inline-flex;align-items:center;gap:6px;font-size:12px">
+      min score
+      <input type="number" name="min_score" value="{{ filters.min_score }}" min="0" max="100"
+             style="width:5rem;min-width:0">
+    </label>
+    <select name="sort" style="width:auto;min-width:9rem">
+      <option value="score" {{ 'selected' if filters.sort == 'score' }}>by score</option>
+      <option value="posted" {{ 'selected' if filters.sort == 'posted' }}>newest posted</option>
+      <option value="recent" {{ 'selected' if filters.sort == 'recent' }}>recently found</option>
+      <option value="company" {{ 'selected' if filters.sort == 'company' }}>by company</option>
+    </select>
+    <button class="btn btn-secondary btn-sm" type="submit">Filter</button>
+  </form>
+
+  {# Freshness is its own row: on a fast-moving board it is the control you
+     reach for most, and the counts here are guaranteed to equal the rows the
+     link delivers. #}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+    <span class="eyebrow" style="margin:0">Posted</span>
+    {% for key, label in [('1h', 'last hour'), ('24h', 'last 24h'), ('7d', 'last 7d')] %}
+      <a class="tag {{ 'tag-accent' if filters.fresh == key }}"
+         style="text-decoration:none" href="/review?fresh={{ key }}{{ qs }}">
+        {{ label }} <strong>{{ fresh_counts[key] }}</strong>
+      </a>
+    {% endfor %}
+    {% if filters.fresh %}
+      <a class="tag tag-plain" style="text-decoration:none"
+         href="/review{{ ('?' ~ qs[1:]) if qs|length > 1 }}">clear ✕</a>
+    {% endif %}
+  </div>
 </div>
 
 {% if not jobs %}
   <div class="empty">
     {% if unscored %}
-      <p style="font-size:1.05rem"><strong>{{ unscored }}</strong> job{{ 's' if unscored != 1 }} discovered, but not scored yet.</p>
+      <p style="font-size:18px;color:var(--ink)"><strong>{{ unscored }}</strong> job{{ 's' if unscored != 1 }} discovered, not scored yet.</p>
       {% if not has_api_key %}
-        <p>
-          Scoring needs a Claude API key. Put
-          <code>ANTHROPIC_API_KEY=sk-ant-…</code> in a <code>.env</code> file at
-          the project root and restart the server.
-        </p>
+        <p>Scoring needs a Claude API key. Put <code>ANTHROPIC_API_KEY=sk-ant-…</code>
+           in a <code>.env</code> file at the project root and restart.</p>
       {% else %}
-        <p>Head to <a href="/run">Run</a> and hit <strong>Run score</strong>.</p>
+        <p>Head to <a href="/run">Run</a> and start <strong>score</strong>.</p>
       {% endif %}
-      <p style="margin-top:1.2rem">
-        Or skip scoring for now and
-        <a href="/review?status=new&amp;min_score=0"><strong>review them unscored</strong></a>
-        — you can approve and apply without a score.
-      </p>
+      <p><a href="/review?status=new&amp;min_score=0"><strong>Review them unscored</strong></a>
+         — you can approve and apply without a score.</p>
     {% else %}
       <p>Nothing here.</p>
-      <p>Start on <a href="/run">Run</a> with <strong>Run discover</strong>, or widen the filters above.</p>
+      <p>Start on <a href="/search">Search</a>, or widen the filters above.</p>
     {% endif %}
   </div>
 {% else %}
 <form method="post" action="/decide">
   <input type="hidden" name="redirect_to" value="/review?status={{ filters.status }}&amp;source={{ filters.source }}&amp;verdict={{ filters.verdict }}&amp;min_score={{ filters.min_score }}&amp;sort={{ filters.sort }}&amp;fresh={{ filters.fresh }}">
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:2.2rem"><input type="checkbox" onclick="document.querySelectorAll('input[name=job_ids]').forEach(c=>c.checked=this.checked)"></th>
-          <th style="width:3.5rem">Score</th>
-          <th>Role</th>
-          <th style="width:6rem">Posted</th>
-          <th style="width:9rem">Location</th>
-          <th style="width:8rem">Apply via</th>
-          <th style="width:6rem">Source</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for job in jobs %}
-        {% set s = job.score %}
-        <tr>
-          <td><input type="checkbox" name="job_ids" value="{{ job.id }}"></td>
-          <td class="score {{ 's-hi' if s and s.fit_score >= 80 else ('s-mid' if s and s.fit_score >= 60 else 's-lo') }}">
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--col),1fr))">
+    {% for job in jobs %}
+      {% set s = job.score %}
+      <article class="job">
+        <div style="flex:none;width:64px">
+          <div class="mono job-score {{ 'hi' if s and s.fit_score >= 80 else ('mid' if s and s.fit_score >= 70 else '') }}">
             {{ s.fit_score if s else '—' }}
-          </td>
-          <td>
-            <div class="title"><a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a></div>
-            <div class="company">{{ job.company }}{% if job.salary_raw %} · {{ job.salary_raw }}{% endif %}</div>
-            {% if s %}
-            <details class="detail">
-              <summary>{{ s.verdict.value }}{% if s.blockers %} · {{ s.blockers|length }} blocker(s){% endif %}</summary>
-              <div>
-                <div class="why">
-                  {% if s.strengths %}
-                  <div><h4>Strengths</h4><ul>{% for x in s.strengths %}<li>{{ x }}</li>{% endfor %}</ul></div>
-                  {% endif %}
-                  {% if s.gaps %}
-                  <div><h4>Gaps</h4><ul>{% for x in s.gaps %}<li>{{ x }}</li>{% endfor %}</ul></div>
-                  {% endif %}
-                  {% if s.blockers %}
-                  <div class="bad"><h4>Blockers</h4><ul>{% for x in s.blockers %}<li>{{ x }}</li>{% endfor %}</ul></div>
-                  {% endif %}
-                </div>
-                {% if s.tailored_summary %}<p class="summary">{{ s.tailored_summary }}</p>{% endif %}
-                <div class="jd">{{ job.description[:6000] }}</div>
-              </div>
-            </details>
-            {% endif %}
-          </td>
-          <td>
-            {% if job.posted_at %}
-              <span class="chip {{ 'ok' if (job.posted_at | age).endswith('m ago') }}">{{ job.posted_at | age }}</span>
-            {% else %}<span class="company">—</span>{% endif %}
-          </td>
-          <td>{{ job.location or '—' }}{% if job.remote %} <span class="chip ok">remote</span>{% endif %}</td>
-          <td>
+          </div>
+          <div class="job-bar"><i style="width:{{ s.fit_score if s else 0 }}%"></i></div>
+          <div class="job-fit">fit</div>
+        </div>
+
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+            <h3 style="font-size:17px;margin:0;letter-spacing:-.01em">
+              <a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>
+            </h3>
+            <span style="font-size:12px;color:var(--ink-55)">{{ job.company }}</span>
+          </div>
+
+          <div class="mono" style="font-size:11px;color:var(--ink-55);margin-top:4px">
+            {{ job.location or 'location unknown' }}
+            · {{ job.source }}
+            {%- if job.posted_at %} · {{ job.posted_at | age }}{% endif %}
+            {%- if job.salary_raw %} · {{ job.salary_raw }}{% endif %}
+          </div>
+
+          {% if s and s.tailored_summary %}
+            <p style="font-size:13px;color:var(--ink-80);margin:10px 0 0">{{ s.tailored_summary }}</p>
+          {% endif %}
+
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+            {% if s %}<span class="tag">{{ s.verdict.value }}</span>{% endif %}
             {% set label, tone = route_labels.get(job.apply_route, ('Unknown', 'muted')) %}
-            <span class="chip {{ tone }}">{{ label }}</span>
-          </td>
-          <td>
-            <span class="chip">{{ job.source }}</span>
-            {% if job.also_seen_on %}<span class="chip">+{{ job.also_seen_on|length }}</span>{% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+            <span class="tag">{{ label }}</span>
+            {% if job.remote %}<span class="tag tag-accent">remote</span>{% endif %}
+            {% if s and s.blockers %}
+              <span class="tag tag-warn">{{ s.blockers|length }} blocker{{ 's' if s.blockers|length != 1 }}</span>
+            {% endif %}
+          </div>
+
+          {% if s %}
+          <details class="detail">
+            <summary>reasoning</summary>
+            <div>
+              <div class="why">
+                {% if s.strengths %}
+                  <div><h4>Strengths</h4><ul>{% for x in s.strengths %}<li>{{ x }}</li>{% endfor %}</ul></div>
+                {% endif %}
+                {% if s.gaps %}
+                  <div><h4>Gaps</h4><ul>{% for x in s.gaps %}<li>{{ x }}</li>{% endfor %}</ul></div>
+                {% endif %}
+                {% if s.blockers %}
+                  <div><h4 style="color:var(--accent)">Blockers</h4><ul>{% for x in s.blockers %}<li>{{ x }}</li>{% endfor %}</ul></div>
+                {% endif %}
+              </div>
+              <div class="jd">{{ job.description[:6000] }}</div>
+            </div>
+          </details>
+          {% endif %}
+
+          <label class="job-pick">
+            <input type="checkbox" name="job_ids" value="{{ job.id }}">
+            select
+          </label>
+        </div>
+      </article>
+    {% endfor %}
   </div>
 
-  <div class="actions">
-    <button type="submit" name="action" value="approve">Approve selected</button>
-    <button type="submit" name="action" value="skip" class="ghost">Skip selected</button>
-    <span class="count">{{ jobs|length }} shown. Approving queues for <code>jobbot apply</code>; nothing is submitted yet.</span>
+  <div class="footbar">
+    <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+      <input type="checkbox"
+             onclick="document.querySelectorAll('input[name=job_ids]').forEach(c=>c.checked=this.checked)">
+      all
+    </label>
+    <span class="mono" style="font-size:13px">{{ jobs|length }} shown</span>
+    <button class="btn btn-sm" type="submit" name="action" value="approve">Approve selected</button>
+    <button class="btn btn-secondary btn-sm" type="submit" name="action" value="skip">Skip selected</button>
+    <a class="btn btn-sm" href="/run" style="margin-left:auto">Take queue to Run →</a>
   </div>
 </form>
 {% endif %}
+
+<style>
+  .job {
+    padding: var(--rowpad) 24px; display: flex; gap: 18px; align-items: flex-start;
+    border-bottom: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft);
+  }
+  .job-score {
+    font-size: 34px; line-height: .9; letter-spacing: -.03em; color: var(--ink-55);
+  }
+  .job-score.hi { color: var(--accent); }
+  .job-score.mid { color: var(--tint-fg); }
+  .job-bar { height: 4px; background: var(--line-soft); margin-top: 8px; }
+  .job-bar i { display: block; height: 4px; background: currentColor; color: var(--ink-55); }
+  .job-score.hi ~ .job-bar i { background: var(--accent); }
+  .job-fit {
+    font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-50); margin-top: 6px;
+  }
+  .job h3 a { color: var(--ink); text-decoration: none; }
+  .job h3 a:hover { color: var(--accent); text-decoration: underline; }
+  .job-pick {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-55); cursor: pointer;
+  }
+  details.detail { margin-top: 10px; }
+  details.detail summary {
+    cursor: pointer; color: var(--ink-55); font-size: 11px;
+    letter-spacing: .08em; text-transform: uppercase; list-style: none;
+  }
+  details.detail summary::-webkit-details-marker { display: none; }
+  details.detail summary::before { content: "▸ "; }
+  details.detail[open] summary::before { content: "▾ "; }
+  .why { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 10px; }
+  .why h4 {
+    margin: 0 0 4px; font-size: 10px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-55); font-weight: 800;
+  }
+  .why ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--ink-70); }
+  .jd {
+    max-height: 16rem; overflow: auto; white-space: pre-wrap;
+    font-size: 12px; color: var(--ink-55); margin-top: 12px; padding: 10px;
+    background: var(--surface);
+  }
+</style>
 {% endblock %}

@@ -17,11 +17,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
-from ..config import load_search_config
+from ..appliers.runner import applications_today
+from ..config import SearchQuery, SiteConfig, load_search_config, save_search_config
 from ..db import (
     Application,
     ApplyRoute,
@@ -37,6 +39,7 @@ from . import setup as setup_mod
 from .tasks import TASKS, TaskBusy, stream_lines
 
 TEMPLATES = Path(__file__).parent / "templates"
+STATIC = Path(__file__).parent / "static"
 
 
 @asynccontextmanager
@@ -45,8 +48,40 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def shell_context(_: Request) -> dict:
+    """Values the page chrome needs on *every* render.
+
+    A context processor rather than a line in each handler: the header shows
+    these on all pages, and threading them through ten routes is exactly how
+    one ends up missing and rendering a blank bar. It also supplies `counts`,
+    which three handlers were not passing.
+
+    Note context processors run last and override handler context, so this
+    must not invent a value a handler is entitled to disagree with — `counts`
+    is the same `_counts()` the handlers compute, not a second opinion.
+    """
+    task = TASKS.current  # a property, and already None unless still running
+    running = task.label if task else ""
+    cfg = load_search_config()
+    with session_scope() as session:
+        counts = _counts(session)
+        # The same helper the applier uses to enforce the cap, so the header
+        # can never advertise a different limit from the one in force.
+        used = applications_today(session)
+    return {
+        "counts": counts,
+        "run_label": f"running {running}" if running else "idle",
+        "cap_line": (
+            f"{counts.get('approved', 0)} queued · "
+            f"{used} of {cfg.apply.max_per_day} daily applications used"
+        ),
+    }
+
+
 app = FastAPI(title="jobbot", docs_url=None, redoc_url=None, lifespan=lifespan)
-templates = Jinja2Templates(directory=str(TEMPLATES))
+# Vendored webfont, served locally so the UI has no third-party dependency.
+app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES), context_processors=[shell_context])
 
 
 ROUTE_LABELS = {
@@ -583,13 +618,206 @@ async def upload_resume_route(resume: UploadFile = File(...)):
 # Run — drive the pipeline
 # ==========================================================================
 
+# ==========================================================================
+# Search — the shared sweep
+# ==========================================================================
+
+#: Freshness windows the Search screen offers, as hours. "any" means no window.
+FRESH_CHOICES = {"1h": 1, "24h": 24, "7d": 168, "any": None}
+
+#: Sites the Search screen can toggle, in display order.
+SEARCH_SITES = ("instahyre", "cutshort", "linkedin")
+
+
+def _primary_query(cfg) -> SearchQuery:
+    """The query the Search form edits.
+
+    The screen models one sweep shared across every board, so it needs a
+    single query to seed from. Prefer an enabled site's first query; fall
+    back to any site's, then to an empty one.
+    """
+    for site in SEARCH_SITES:
+        conf = cfg.sites.get(site)
+        if conf and conf.enabled and conf.queries:
+            return conf.queries[0]
+    for conf in cfg.sites.values():
+        if conf.queries:
+            return conf.queries[0]
+    return SearchQuery(keywords="", location="")
+
+
+def _fresh_key(query: SearchQuery) -> str:
+    hours = query.posted_within_hours or (
+        query.posted_within_days * 24 if query.posted_within_days else None
+    )
+    for key, value in FRESH_CHOICES.items():
+        if value == hours:
+            return key
+    return "any"
+
+
+def _extra_queries(cfg, primary: SearchQuery) -> list[dict]:
+    """Queries a save from this screen would overwrite.
+
+    The config models a query *list* per site; this screen models one shared
+    sweep. Writing the form therefore replaces those lists. Anything that
+    would be lost is surfaced in the UI first rather than deleted quietly —
+    the LinkedIn 1h/24h pair lives here, and losing it to a form post nobody
+    read would be a genuinely bad trade.
+    """
+    extras = []
+    for site in SEARCH_SITES:
+        conf = cfg.sites.get(site)
+        if not conf:
+            continue
+        for query in conf.queries:
+            # By value, not identity. After a save each site holds its own
+            # equal-but-distinct copy of the shared sweep; comparing with `is`
+            # counted those as losses and warned about discarding the very
+            # thing that had just been written.
+            if query == primary:
+                continue
+            extras.append(
+                {
+                    "site": site,
+                    "label": query.label or query.keywords or "(unlabelled)",
+                    "meta": query.describe()
+                    if hasattr(query, "describe")
+                    else f"{query.keywords} · {query.location or 'anywhere'}",
+                }
+            )
+    return extras
+
+
+@app.get("/search")
+def search_page(request: Request, saved: str = ""):
+    cfg = load_search_config()
+    primary = _primary_query(cfg)
+
+    with session_scope() as session:
+        reachable = session.execute(
+            select(func.count(Job.id))
+            .join(Score, Score.job_id == Job.id, isouter=True)
+            .where(Score.fit_score >= cfg.review.min_score)
+        ).scalar() or 0
+        unscored = session.execute(
+            select(func.count(Job.id)).where(~Job.id.in_(select(Score.job_id)))
+        ).scalar() or 0
+        counts = _counts(session)
+
+    enabled = [s for s in SEARCH_SITES if (c := cfg.sites.get(s)) and c.enabled]
+    prefilter_rules = (
+        len(cfg.prefilter.exclude_title_keywords)
+        + len(cfg.prefilter.exclude_companies)
+        + len(cfg.prefilter.allow_locations)
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "search.html",
+        {
+            "counts": counts,
+            "kw": primary.keywords,
+            "loc": primary.location,
+            "remote": primary.remote,
+            "fresh": _fresh_key(primary),
+            "fresh_choices": list(FRESH_CHOICES),
+            "min_score": cfg.review.min_score,
+            "excludes": cfg.prefilter.exclude_title_keywords,
+            "sites": [
+                {
+                    "name": s,
+                    "on": bool(c and c.enabled),
+                    "meta": f"cap {c.daily_cap}/day" if c else "not configured",
+                    "note": "terms risk — keep low"
+                    if s == "linkedin"
+                    else ("session valid" if c and c.enabled else "off"),
+                }
+                for s in SEARCH_SITES
+                for c in [cfg.sites.get(s)]
+            ],
+            "estimates": [
+                {"v": sum(cfg.sites[s].daily_cap for s in enabled), "k": "daily cap across boards"},
+                {"v": prefilter_rules, "k": "prefilter rules"},
+                {"v": reachable, "k": "already past the score bar"},
+                {"v": f"${unscored * 0.04:.2f}", "k": "to score what's waiting"},
+            ],
+            "extras": _extra_queries(cfg, primary),
+            "summary": (
+                f"{len(enabled)} board{'' if len(enabled) == 1 else 's'} · "
+                f"posted within {_fresh_key(primary)} · score ≥ {cfg.review.min_score}"
+            ),
+            "saved_note": saved,
+        },
+    )
+
+
+@app.post("/search")
+def save_search(
+    keywords: str = Form(default=""),
+    location: str = Form(default=""),
+    remote: str = Form(default=""),
+    fresh: str = Form(default="any"),
+    min_score: int = Form(default=60),
+    excludes: str = Form(default=""),
+    boards: list[str] = Form(default=[]),
+    then: str = Form(default=""),
+):
+    cfg = load_search_config()
+    hours = FRESH_CHOICES.get(fresh)
+    query = SearchQuery(
+        keywords=keywords.strip(),
+        location=location.strip(),
+        remote=remote == "on",
+        posted_within_hours=hours,
+        label=f"Shared sweep — {fresh}" if hours else "Shared sweep",
+    )
+
+    for site in SEARCH_SITES:
+        conf = cfg.sites.get(site)
+        if conf is None:
+            conf = SiteConfig()
+            cfg.sites[site] = conf
+        conf.enabled = site in boards
+        conf.queries = [query]
+
+    cfg.review.min_score = max(0, min(100, min_score))
+    cfg.prefilter.exclude_title_keywords = [
+        w.strip() for w in excludes.split(",") if w.strip()
+    ]
+    save_search_config(cfg)
+
+    if then == "discover":
+        try:
+            TASKS.start(["discover"], _label("discover", "", False))
+        except TaskBusy as exc:
+            return RedirectResponse(f"/run?error={_q(str(exc))}", status_code=303)
+        return RedirectResponse("/run?watch=1", status_code=303)
+    return RedirectResponse("/search?saved=1", status_code=303)
+
+
 _RUNNABLE = {"discover", "score", "apply"}
 
 
 @app.get("/run")
 def run_page(request: Request, error: str = "", task: str = ""):
+    cfg = load_search_config()
     with session_scope() as session:
         counts = _counts(session)
+        used = applications_today(session)
+
+    # Read from config rather than restated in the template, so the panel and
+    # the caps the applier actually enforces cannot drift apart.
+    limits = {
+        "per_day": cfg.apply.max_per_day,
+        "per_company": cfg.apply.max_per_company_per_week,
+        "rows": [
+            {"label": "Applications today", "value": f"{used} / {cfg.apply.max_per_day}"},
+            {"label": "Per company this week", "value": f"max {cfg.apply.max_per_company_per_week}"},
+            {"label": "Failure circuit breaker", "value": f"{cfg.apply.failure_circuit_breaker} in a row"},
+            {"label": "Evidence retention", "value": "data/evidence/"},
+        ],
+    }
 
     history = TASKS.history()
     running = TASKS.current
@@ -607,6 +835,7 @@ def run_page(request: Request, error: str = "", task: str = ""):
             "running": running,
             "shown": shown,
             "history": history,
+            "limits": limits,
             "error": error,
         },
     )

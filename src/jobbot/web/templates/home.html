@@ -3,77 +3,66 @@
 {% block title %}jobbot{% endblock %}
 
 {% set p = pipeline %}
-{% set TONE = {'neutral': 'var(--viz-neutral)', 'warn': 'var(--viz-warn)',
-               'queued': 'var(--viz-queued)', 'done': 'var(--viz-done)'} %}
+{# Modernist is a mono scheme — there is no second accent to spend on a
+   category. So identity here is carried by LIGHTNESS steps on one ink ramp,
+   with the accent reserved for the one bucket that actually wants an action.
+   Every segment is also named in the legend and in a <title>, so identity is
+   never colour alone. #}
+{% set TONE = {
+  'neutral': 'color-mix(in srgb, var(--ink) 18%, transparent)',
+  'warn':    'var(--accent)',
+  'queued':  'color-mix(in srgb, var(--ink) 52%, transparent)',
+  'done':    'color-mix(in srgb, var(--ink) 92%, transparent)'
+} %}
 {% set LINK = {'to_review': '/review?status=new&min_score=0', 'needs_you': '/needs-input',
                'queued': '/applications', 'submitted': '/applications?show=sent'} %}
 
 {% block content %}
 
-<!-- Hero ------------------------------------------------------------- -->
-<section class="hero">
+<!-- Poster statement: the one place the accent runs as a field. ------- -->
+<section class="poster">
   <div>
-    <h1>Apply to the jobs worth applying to.</h1>
-    <p class="lede">
-      jobbot scrapes the boards you've connected, scores every posting against
+    <h1 class="poster-h1">Apply to the jobs<br>worth applying to.</h1>
+    <p class="poster-lede">
+      jobbot sweeps the boards you've connected, scores every posting against
       your resume, and fills the applications you approve. Nothing is ever sent
       without you ticking it first.
     </p>
-    <div class="cta">
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
       {% if not ready.any_site_connected %}
-        <a href="/setup">Connect a job board →</a>
+        <a class="btn poster-btn" href="/setup">Connect a job board →</a>
       {% elif p.to_review %}
-        <a href="/review">Review {{ p.to_review }} job{{ 's' if p.to_review != 1 }} →</a>
+        <a class="btn poster-btn" href="/review">Review {{ p.to_review }} job{{ 's' if p.to_review != 1 }} →</a>
       {% elif p.queued %}
-        <a href="/run">Apply to {{ p.queued }} queued →</a>
+        <a class="btn poster-btn" href="/run">Apply to {{ p.queued }} queued →</a>
       {% else %}
-        <a href="/run">Find more jobs →</a>
+        <a class="btn poster-btn" href="/search">Find more jobs →</a>
       {% endif %}
-      <a href="/run" class="ghost">Run the pipeline</a>
-    </div>
-  </div>
-
-  <!-- Decorative only: a deck of job cards floating in 3D, tilting toward
-       the pointer. Pure CSS transforms — no library, no CDN, still works
-       offline — and it stops moving under prefers-reduced-motion. -->
-  <div class="deck-stage" id="deckStage" aria-hidden="true">
-    <div class="deck" id="deck">
-      <div class="card3d" style="--i:0; --edge:var(--viz-neutral)">
-        <span class="l1"></span><span class="l2"></span><span class="tag">discovered</span>
-      </div>
-      <div class="card3d" style="--i:1; --edge:var(--viz-warn)">
-        <span class="l1"></span><span class="l2"></span><span class="tag">scored</span>
-      </div>
-      <div class="card3d" style="--i:2; --edge:var(--viz-queued)">
-        <span class="l1"></span><span class="l2"></span><span class="tag">approved</span>
-      </div>
-      <div class="card3d" style="--i:3; --edge:var(--viz-done)">
-        <span class="l1"></span><span class="l2"></span><span class="tag">submitted</span>
-      </div>
+      <a class="btn poster-btn-ghost" href="/run">Run the pipeline</a>
     </div>
   </div>
 </section>
 
-<!-- KPI row ----------------------------------------------------------- -->
-<div class="kpis">
-  <div class="kpi"><div class="v">{{ p.to_review }}</div><div class="k">Pending approval</div></div>
-  <div class="kpi"><div class="v">{{ p.queued }}</div><div class="k">Queued to apply</div></div>
-  <div class="kpi"><div class="v">{{ p.needs_you }}</div><div class="k">Needs your input</div></div>
-  <div class="kpi"><div class="v" style="color:var(--viz-done)">{{ p.submitted }}</div><div class="k">Submitted</div></div>
-</div>
+<div class="screen">
+  <!-- Pipeline figures ---------------------------------------------- -->
+  <div class="cells" style="grid-template-columns:repeat(4,1fr);margin-bottom:32px" id="kpis">
+    <div class="cell"><div class="v">{{ p.to_review }}</div><div class="k">Pending approval</div></div>
+    <div class="cell"><div class="v">{{ p.queued }}</div><div class="k">Queued to apply</div></div>
+    <div class="cell"><div class="v">{{ p.needs_you }}</div><div class="k">Needs your input</div></div>
+    <div class="cell"><div class="v" style="color:var(--accent)">{{ p.submitted }}</div><div class="k">Submitted</div></div>
+  </div>
 
-<!-- Pipeline donut ---------------------------------------------------- -->
-<div class="card">
-  <h2 style="margin-top:0">Where your jobs are</h2>
-  <p class="hint">
+  <!-- Where the jobs are -------------------------------------------- -->
+  <div class="eyebrow">Where your jobs are</div>
+  <p style="font-size:13px;color:var(--ink-70);margin:0 0 20px;max-width:60ch">
     Every job currently in the pipeline. Closed-out jobs ({{ p.closed }} skipped
     or failed) aren't shown.
   </p>
 
   {% if not p.active %}
-    <div class="empty">
+    <div class="empty" style="padding-left:0">
       <p>No jobs yet.</p>
-      <p>Head to <a href="/run">Run</a> and start with <strong>Run discover</strong>.</p>
+      <p>Head to <a href="/search">Search</a> and start with <strong>Run discover</strong>.</p>
     </div>
   {% else %}
     <div class="chart-row">
@@ -82,7 +71,7 @@
              role="img" aria-label="Pipeline breakdown; the same figures are listed beside the chart.">
           <!-- Track, so a nearly-empty pipeline still reads as a ring -->
           <circle cx="100" cy="100" r="70" fill="none"
-                  stroke="var(--chip)" stroke-width="28"/>
+                  stroke="var(--surface)" stroke-width="28"/>
           {% for s in p.segments %}
             {% if s.value %}
               <circle cx="100" cy="100" r="70" fill="none"
@@ -95,7 +84,7 @@
           {% endfor %}
         </svg>
         <div class="donut-centre">
-          <div class="hero-figure">{{ p.active }}</div>
+          <div class="hero-figure mono">{{ p.active }}</div>
           <div class="hero-label">jobs in play</div>
         </div>
       </div>
@@ -106,60 +95,89 @@
           <li>
             <span class="swatch" style="background:{{ TONE[s.tone] }}"></span>
             <a href="{{ LINK[s.key] }}">{{ s.label }}</a>
-            <span class="n">{{ s.value }}</span>
-            <span class="pct">{{ s.pct }}%</span>
+            <span class="n mono">{{ s.value }}</span>
+            <span class="pct mono">{{ s.pct }}%</span>
           </li>
         {% endfor %}
       </ul>
     </div>
   {% endif %}
-</div>
 
-<!-- Best matches ------------------------------------------------------ -->
-{% if top %}
-  <div class="card">
-    <h2 style="margin-top:0">Best matches awaiting your decision</h2>
+  <!-- Best matches --------------------------------------------------- -->
+  {% if top %}
+    <div class="eyebrow" style="margin-top:40px">Best matches awaiting your decision</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th style="width:3.5rem">Score</th><th>Role</th><th style="width:9rem">Location</th></tr></thead>
+        <thead><tr><th style="width:4rem">Score</th><th>Role</th><th style="width:12rem">Location</th></tr></thead>
         <tbody>
         {% for job in top %}
           <tr>
-            <td class="score {{ 's-hi' if job.score.fit_score >= 80 else 's-mid' }}">{{ job.score.fit_score }}</td>
-            <td>
-              <div class="title"><a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a></div>
-              <div class="company">{{ job.company }}</div>
+            <td class="mono" style="font-size:20px;color:{{ 'var(--accent)' if job.score.fit_score >= 80 else 'var(--ink-55)' }}">
+              {{ job.score.fit_score }}
             </td>
-            <td>{{ job.location or '—' }}</td>
+            <td>
+              <div style="font-weight:800">
+                <a href="{{ job.url }}" target="_blank" rel="noopener"
+                   style="color:var(--ink);text-decoration:none">{{ job.title }}</a>
+              </div>
+              <div class="mono" style="font-size:12px;color:var(--ink-55)">{{ job.company }}</div>
+            </td>
+            <td style="font-size:13px">{{ job.location or '—' }}</td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
-    <p style="margin:.8rem 0 0"><a href="/review">Review all →</a></p>
-  </div>
-{% endif %}
+    <p style="margin:16px 0 0"><a href="/review">Review all →</a></p>
+  {% endif %}
+</div>
 
-<script>
-(function () {
-  // Parallax tilt on the card deck. Decorative, so it degrades to the static
-  // CSS transform if anything here doesn't apply.
-  var stage = document.getElementById('deckStage');
-  var deck = document.getElementById('deck');
-  if (!stage || !deck) return;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+<style>
+  /* The poster: display type on a solid accent field. Flush left, no radius,
+     nothing floating — the block itself is the graphic. */
+  .poster {
+    background: var(--poster-bg); color: var(--poster-fg);
+    padding: 64px 24px; border-bottom: 2px solid var(--line);
+  }
+  .poster-h1 {
+    font-size: clamp(38px, 6vw, 76px); line-height: .98;
+    letter-spacing: -.04em; margin: 0 0 16px; max-width: 18ch;
+  }
+  .poster-lede {
+    margin: 0 0 28px; max-width: 54ch; font-size: 15px;
+    color: color-mix(in srgb, var(--poster-fg) 88%, transparent);
+  }
+  .poster-btn { background: var(--poster-fg); color: var(--poster-bg); }
+  .poster-btn:hover { background: var(--ink); color: var(--bg); }
+  .poster-btn-ghost {
+    background: transparent; color: var(--poster-fg);
+    border: 1px solid color-mix(in srgb, var(--poster-fg) 60%, transparent);
+  }
+  .poster-btn-ghost:hover { background: var(--poster-fg); color: var(--poster-bg); }
 
-  stage.addEventListener('pointermove', function (e) {
-    var r = stage.getBoundingClientRect();
-    var x = (e.clientX - r.left) / r.width - 0.5;
-    var y = (e.clientY - r.top) / r.height - 0.5;
-    deck.style.setProperty('--ry', (-22 + x * 26).toFixed(1) + 'deg');
-    deck.style.setProperty('--rx', (14 - y * 20).toFixed(1) + 'deg');
-  });
-  stage.addEventListener('pointerleave', function () {
-    deck.style.setProperty('--ry', '-22deg');
-    deck.style.setProperty('--rx', '14deg');
-  });
-})();
-</script>
+  .chart-row { display: grid; gap: 32px; grid-template-columns: 260px 1fr; align-items: center; }
+  @media (max-width: 780px) { .chart-row { grid-template-columns: 1fr; } }
+  .donut-wrap { position: relative; display: grid; place-items: center; }
+  .donut { transform: rotate(-90deg); }
+  .donut circle { transition: stroke-width .15s ease; }
+  .donut circle:hover { stroke-width: 32; }
+  .donut-centre { position: absolute; text-align: center; pointer-events: none; }
+  .hero-figure { font-size: 44px; line-height: 1; letter-spacing: -.04em; }
+  .hero-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--ink-55); margin-top: 6px;
+  }
+  .legend { list-style: none; margin: 0; padding: 0; max-width: 520px; }
+  .legend li {
+    display: grid; grid-template-columns: 12px 1fr auto 3.5rem;
+    align-items: center; gap: 12px;
+    padding: 12px 0; border-top: 1px solid var(--line-soft);
+  }
+  .legend .swatch { width: 12px; height: 12px; border: 1px solid var(--ink-45); }
+  .legend a { color: var(--ink); text-decoration: none; font-size: 14px; }
+  .legend a:hover { color: var(--accent); text-decoration: underline; }
+  .legend .n { font-weight: 800; }
+  .legend .pct { color: var(--ink-55); font-size: 12px; text-align: right; }
+  @media (max-width: 760px) { #kpis { grid-template-columns: 1fr 1fr !important; } }
+</style>
 {% endblock %}

@@ -10,259 +10,273 @@
                     else ('key' if not ready.api_key_ok
                     else ('details' if not ready.profile_ok else ''))) %}
 
-{% macro chevron() %}
-<svg class="chev" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-  <path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="2"
-        stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
-{% endmacro %}
-
 {% block content %}
-{% if error %}<div class="banner err">{{ error }}</div>{% endif %}
-{% if saved == 'profile' %}<div class="banner ok">Details saved.</div>{% endif %}
-{% if saved == 'resume' %}<div class="banner ok">Resume uploaded and parsed.</div>{% endif %}
+<div class="screen">
+  <div class="kicker">Step 00 — Connect</div>
+  <h1 class="title-lg" style="margin:0 0 20px">Setup</h1>
 
-{% if not first_todo %}
-  <div class="banner ok">
-    Everything's set up. Head to <a href="/run">Run</a> to start the pipeline.
-  </div>
-{% endif %}
+  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+  {% if saved == 'profile' %}<div class="banner ok">Details saved.</div>{% endif %}
+  {% if saved == 'resume' %}<div class="banner ok">Resume uploaded and parsed.</div>{% endif %}
 
-<div class="stack">
+  {% if not first_todo %}
+    <div class="banner ok">
+      Everything's set up. Head to <a href="/search">Search</a> to define a sweep,
+      or <a href="/run">Run</a> to start the pipeline.
+    </div>
+  {% endif %}
 
-  <!-- 1 · Accounts ------------------------------------------------- -->
-  <details class="panel3d {{ 'done' if connected }}"
-           style="--spine: {{ 'var(--ok)' if connected else 'var(--warn)' }}"
-           {{ 'open' if first_todo == 'accounts' or saved == 'connect' }}>
-    <summary>
-      <span class="step-no">{{ '✓' if connected else '1' }}</span>
-      <span>
-        <span class="panel-title">Job board accounts</span>
-        <span class="panel-sub">
-          {% if connected %}{{ connected }} of {{ sites | length }} connected{% else %}None connected yet{% endif %}
+  <div class="stack">
+
+    <!-- 1 · Accounts ------------------------------------------------- -->
+    <details class="step" {{ 'open' if first_todo == 'accounts' or saved == 'connect' }}>
+      <summary>
+        <span class="step-no {{ 'done' if connected }}">{{ '✓' if connected else '01' }}</span>
+        <span class="step-head">
+          <span class="step-title">Job board accounts</span>
+          <span class="step-sub">
+            {% if connected %}{{ connected }} of {{ sites | length }} connected{% else %}None connected yet{% endif %}
+          </span>
         </span>
-      </span>
-      <span class="chip {{ 'ok' if connected else 'warn' }}">
-        {{ 'Ready' if connected else 'Needed' }}
-      </span>
-      {{ chevron() }}
-    </summary>
+        <span class="tag {{ '' if connected else 'tag-warn' }}">{{ 'Ready' if connected else 'Needed' }}</span>
+      </summary>
 
-    <div class="panel-body">
-      <p class="hint">
-        Connecting opens a real browser window where <strong>you</strong> log in —
-        2FA and all. Your password is never typed by this tool, never sent here,
-        and never stored. Only the resulting browser session is kept, on this machine.
-      </p>
+      <div class="step-body">
+        <p class="hint">
+          Connecting opens a real browser window where <strong>you</strong> log in —
+          2FA and all. Your password is never typed by this tool, never sent here,
+          and never stored. Only the resulting browser session is kept, on this machine.
+        </p>
 
-      <div class="rowlist">
         {% for s in sites %}
-          <div class="row">
+          <div class="siterow">
             <div>
-              <div><span class="dot {{ s.state }}"></span><strong>{{ s.site }}</strong>
-                {% if s.jobs_found %}<span class="chip">{{ s.jobs_found }} jobs</span>{% endif %}
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="dot {{ s.state }}"></span>
+                <strong>{{ s.site }}</strong>
+                {% if s.jobs_found %}<span class="tag">{{ s.jobs_found }} jobs</span>{% endif %}
               </div>
-              <div class="panel-sub">{{ s.blurb }}</div>
+              <div class="step-sub">{{ s.blurb }}</div>
             </div>
             <form method="post" action="/setup/connect">
               <input type="hidden" name="site" value="{{ s.site }}">
-              <button type="submit" class="{{ 'ghost' if s.connected }}" {{ 'disabled' if running }}>
+              <button class="btn btn-sm {{ 'btn-secondary' if s.connected }}" type="submit"
+                      {{ 'disabled' if running }}>
                 {{ 'Reconnect' if s.connected else 'Connect' }}
               </button>
             </form>
           </div>
         {% endfor %}
+
+        {% if running %}
+          <p class="hint" style="margin-top:14px">
+            {{ running.label }} is running — <a href="/run">watch it</a>.
+          </p>
+        {% endif %}
+
+        <p class="hint" style="margin-top:14px">
+          Which sites are swept, and how hard, is set on <a href="/search">Search</a>
+          and stored in <code>config/search.yaml</code>. LinkedIn's terms prohibit
+          automation and they do restrict accounts — keep its cap low or turn it off.
+        </p>
       </div>
+    </details>
 
-      {% if running %}
-        <p class="hint" style="margin-top:.9rem">
-          <span class="spinner"></span> {{ running.label }} is running —
-          <a href="/run">watch it</a>.
+    <!-- 2 · Resume ---------------------------------------------------- -->
+    <details class="step" {{ 'open' if first_todo == 'resume' }}>
+      <summary>
+        <span class="step-no {{ 'done' if ready.resume_ok }}">{{ '✓' if ready.resume_ok else '02' }}</span>
+        <span class="step-head">
+          <span class="step-title">Resume</span>
+          <span class="step-sub">
+            {{ ready.resume_name if ready.resume_ok else 'Scoring and applying both need one' }}
+          </span>
+        </span>
+        <span class="tag {{ '' if ready.resume_ok else 'tag-warn' }}">{{ 'Ready' if ready.resume_ok else 'Needed' }}</span>
+      </summary>
+
+      <div class="step-body">
+        <form method="post" action="/setup/resume" enctype="multipart/form-data">
+          <input type="file" name="resume" accept=".pdf,.docx,.doc,.txt,.md" required>
+          <div style="margin-top:12px"><button class="btn btn-sm" type="submit">Upload</button></div>
+        </form>
+        <p class="hint" style="margin-top:14px">
+          PDF, DOCX, TXT or MD. It's parsed on upload, so a scanned image is
+          rejected here rather than silently scoring every job against a blank page.
         </p>
-      {% endif %}
+      </div>
+    </details>
 
-      <p class="hint" style="margin:.9rem 0 0">
-        Which sites are searched, and how hard, lives in
-        <code>config/search.yaml</code>. LinkedIn ships disabled: its terms
-        prohibit automation and they do restrict accounts.
-      </p>
-    </div>
-  </details>
-
-  <!-- 2 · Resume ---------------------------------------------------- -->
-  <details class="panel3d {{ 'done' if ready.resume_ok }}"
-           style="--spine: {{ 'var(--ok)' if ready.resume_ok else 'var(--warn)' }}"
-           {{ 'open' if first_todo == 'resume' }}>
-    <summary>
-      <span class="step-no">{{ '✓' if ready.resume_ok else '2' }}</span>
-      <span>
-        <span class="panel-title">Resume</span>
-        <span class="panel-sub">
-          {{ ready.resume_name if ready.resume_ok else 'Scoring and applying both need one' }}
+    <!-- 3 · API key --------------------------------------------------- -->
+    <details class="step" {{ 'open' if first_todo == 'key' }}>
+      <summary>
+        <span class="step-no {{ 'done' if ready.api_key_ok }}">{{ '✓' if ready.api_key_ok else '03' }}</span>
+        <span class="step-head">
+          <span class="step-title">Claude API key</span>
+          <span class="step-sub">
+            {{ 'Found — scoring is available' if ready.api_key_ok else 'Needed to score jobs against your resume' }}
+          </span>
         </span>
-      </span>
-      <span class="chip {{ 'ok' if ready.resume_ok else 'warn' }}">
-        {{ 'Ready' if ready.resume_ok else 'Needed' }}
-      </span>
-      {{ chevron() }}
-    </summary>
+        <span class="tag {{ '' if ready.api_key_ok else 'tag-warn' }}">{{ 'Ready' if ready.api_key_ok else 'Needed' }}</span>
+      </summary>
 
-    <div class="panel-body">
-      <form method="post" action="/setup/resume" enctype="multipart/form-data">
-        <input type="file" name="resume" accept=".pdf,.docx,.doc,.txt,.md" required>
-        <div style="margin-top:.7rem"><button type="submit">Upload</button></div>
-      </form>
-      <p class="hint" style="margin-top:.8rem">
-        PDF, DOCX, TXT or MD. It's parsed on upload, so a scanned image is
-        rejected here rather than silently scoring every job against a blank page.
-      </p>
-    </div>
-  </details>
+      <div class="step-body">
+        {% if ready.api_key_ok %}
+          <p class="hint">
+            A key is available. It's read from the environment or a
+            <code>.env</code> file — never stored by this app.
+          </p>
+        {% else %}
+          <p class="hint">Create a file called <code>.env</code> in the project root containing:</p>
+          <pre class="console" style="height:auto">ANTHROPIC_API_KEY=sk-ant-...</pre>
+          <p class="hint" style="margin-top:12px">
+            Then restart the server. Discovery and dry-run applies work without it;
+            only scoring needs it.
+          </p>
+        {% endif %}
+      </div>
+    </details>
 
-  <!-- 3 · API key --------------------------------------------------- -->
-  <details class="panel3d {{ 'done' if ready.api_key_ok }}"
-           style="--spine: {{ 'var(--ok)' if ready.api_key_ok else 'var(--warn)' }}"
-           {{ 'open' if first_todo == 'key' }}>
-    <summary>
-      <span class="step-no">{{ '✓' if ready.api_key_ok else '3' }}</span>
-      <span>
-        <span class="panel-title">Claude API key</span>
-        <span class="panel-sub">
-          {{ 'Found — scoring is available' if ready.api_key_ok else 'Needed to score jobs against your resume' }}
+    <!-- 4 · Your details ---------------------------------------------- -->
+    <details class="step" {{ 'open' if first_todo == 'details' or saved == 'profile' }}>
+      <summary>
+        <span class="step-no {{ 'done' if ready.profile_ok }}">{{ '✓' if ready.profile_ok else '04' }}</span>
+        <span class="step-head">
+          <span class="step-title">Your details</span>
+          <span class="step-sub">
+            {% if ready.profile_ok %}
+              {{ profile.identity.full_name }} · the only source of factual answers
+            {% else %}
+              Still needed: {{ ready.profile_missing | join(', ') or 'name, email, phone' }}
+            {% endif %}
+          </span>
         </span>
-      </span>
-      <span class="chip {{ 'ok' if ready.api_key_ok else 'warn' }}">
-        {{ 'Ready' if ready.api_key_ok else 'Needed' }}
-      </span>
-      {{ chevron() }}
-    </summary>
+        <span class="tag {{ '' if ready.profile_ok else 'tag-warn' }}">{{ 'Ready' if ready.profile_ok else 'Needed' }}</span>
+      </summary>
 
-    <div class="panel-body">
-      {% if ready.api_key_ok %}
+      <div class="step-body">
         <p class="hint">
-          A key is available. It's read from the environment or a
-          <code>.env</code> file — never stored by this app.
+          These are the <em>only</em> source of factual answers on application
+          forms. Anything a form asks that isn't here parks the application for
+          you rather than getting guessed at.
         </p>
-      {% else %}
-        <p class="hint">
-          Create a file called <code>.env</code> in the project root containing:
-        </p>
-        <pre class="console" style="max-height:none">ANTHROPIC_API_KEY=sk-ant-...</pre>
-        <p class="hint" style="margin-top:.7rem">
-          Then restart the server. Discovery and dry-run applies work without it;
-          only scoring needs it.
-        </p>
-      {% endif %}
-    </div>
-  </details>
 
-  <!-- 4 · Your details ---------------------------------------------- -->
-  <details class="panel3d {{ 'done' if ready.profile_ok }}"
-           style="--spine: {{ 'var(--ok)' if ready.profile_ok else 'var(--warn)' }}"
-           {{ 'open' if first_todo == 'details' or saved == 'profile' }}>
-    <summary>
-      <span class="step-no">{{ '✓' if ready.profile_ok else '4' }}</span>
-      <span>
-        <span class="panel-title">Your details</span>
-        <span class="panel-sub">
-          {% if ready.profile_ok %}
-            {{ profile.identity.full_name }} · the only source of factual answers
-          {% else %}
-            Still needed: {{ ready.profile_missing | join(', ') or 'name, email, phone' }}
-          {% endif %}
-        </span>
-      </span>
-      <span class="chip {{ 'ok' if ready.profile_ok else 'warn' }}">
-        {{ 'Ready' if ready.profile_ok else 'Needed' }}
-      </span>
-      {{ chevron() }}
-    </summary>
-
-    <div class="panel-body">
-      <p class="hint">
-        These are the <em>only</em> source of factual answers on application
-        forms. Anything a form asks that isn't here parks the application for
-        you rather than getting guessed at.
-      </p>
-
-      <form method="post" action="/setup/profile">
-        <div class="group">
-          <h3>Identity</h3>
-          <div class="fields2">
-            <div class="field"><label>First name</label><input name="first_name" value="{{ profile.identity.first_name }}"></div>
-            <div class="field"><label>Last name</label><input name="last_name" value="{{ profile.identity.last_name }}"></div>
-            <div class="field"><label>Email</label><input name="email" type="email" value="{{ profile.identity.email }}"></div>
-            <div class="field"><label>Phone (with country code)</label><input name="phone" value="{{ profile.identity.phone }}"></div>
-            <div class="field"><label>City</label><input name="city" value="{{ profile.identity.city }}"></div>
-            <div class="field"><label>Country</label><input name="country" value="{{ profile.identity.country }}"></div>
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Links</h3>
-          <div class="fields2">
-            <div class="field"><label>LinkedIn</label><input name="linkedin" value="{{ profile.links.linkedin }}"></div>
-            <div class="field"><label>GitHub</label><input name="github" value="{{ profile.links.github }}"></div>
-            <div class="field"><label>Portfolio</label><input name="portfolio" value="{{ profile.links.portfolio }}"></div>
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Employment</h3>
-          <div class="fields2">
-            <div class="field"><label>Current company</label><input name="current_company" value="{{ profile.employment.current_company }}"></div>
-            <div class="field"><label>Current title</label><input name="current_title" value="{{ profile.employment.current_title }}"></div>
-            <div class="field"><label>Total years of experience</label><input name="total_years_experience" type="number" step="0.5" min="0" value="{{ profile.employment.total_years_experience }}"></div>
-            <div class="field"><label>Notice period (days)</label><input name="notice_period_days" type="number" min="0" value="{{ profile.employment.notice_period_days }}"></div>
-            <div class="field"><label>Current CTC</label><input name="current_ctc" placeholder="18 LPA" value="{{ profile.employment.current_ctc }}"></div>
-            <div class="field"><label>Expected CTC</label><input name="expected_ctc" placeholder="26 LPA" value="{{ profile.employment.expected_ctc }}"></div>
-          </div>
-        </div>
-
-        <div class="group">
-          <h3>Eligibility</h3>
-          <div class="field">
-            <label>Authorized to work in (comma separated)</label>
-            <input name="authorized_to_work_in" placeholder="India" value="{{ profile.eligibility.authorized_to_work_in | join(', ') }}">
-          </div>
-          {# Four options, all short: a segmented control shows every choice at
-             once and takes one click instead of two — no popup to cover the
-             page. Radios underneath, so it posts exactly like the select did. #}
-          <div class="field">
-            <label id="workModeLabel">Preferred work mode</label>
-            <div class="segmented" role="radiogroup" aria-labelledby="workModeLabel">
-              {% for value, text in [('', 'No preference'), ('remote', 'Remote'),
-                                     ('hybrid', 'Hybrid'), ('onsite', 'Onsite')] %}
-                <input type="radio" id="wm-{{ loop.index }}" name="preferred_work_mode"
-                       value="{{ value }}"
-                       {{ 'checked' if profile.eligibility.preferred_work_mode == value }}>
-                <label for="wm-{{ loop.index }}">{{ text }}</label>
-              {% endfor %}
+        <form method="post" action="/setup/profile">
+          <div class="group">
+            <div class="eyebrow">Identity</div>
+            <div class="fields2">
+              <div class="field"><label>First name</label><input name="first_name" value="{{ profile.identity.first_name }}"></div>
+              <div class="field"><label>Last name</label><input name="last_name" value="{{ profile.identity.last_name }}"></div>
+              <div class="field"><label>Email</label><input name="email" type="email" value="{{ profile.identity.email }}"></div>
+              <div class="field"><label>Phone (with country code)</label><input name="phone" value="{{ profile.identity.phone }}"></div>
+              <div class="field"><label>City</label><input name="city" value="{{ profile.identity.city }}"></div>
+              <div class="field"><label>Country</label><input name="country" value="{{ profile.identity.country }}"></div>
             </div>
           </div>
-          <label class="check">
-            <input type="checkbox" name="requires_visa_sponsorship" {{ 'checked' if profile.eligibility.requires_visa_sponsorship }}>
-            I require visa sponsorship
-          </label>
-          <label class="check">
-            <input type="checkbox" name="willing_to_relocate" {{ 'checked' if profile.eligibility.willing_to_relocate }}>
-            I'm willing to relocate
-          </label>
-        </div>
 
-        <div style="margin-top:1rem"><button type="submit">Save details</button></div>
-      </form>
-    </div>
-  </details>
+          <div class="group">
+            <div class="eyebrow">Links</div>
+            <div class="fields2">
+              <div class="field"><label>LinkedIn</label><input name="linkedin" value="{{ profile.links.linkedin }}"></div>
+              <div class="field"><label>GitHub</label><input name="github" value="{{ profile.links.github }}"></div>
+              <div class="field"><label>Portfolio</label><input name="portfolio" value="{{ profile.links.portfolio }}"></div>
+            </div>
+          </div>
 
+          <div class="group">
+            <div class="eyebrow">Employment</div>
+            <div class="fields2">
+              <div class="field"><label>Current company</label><input name="current_company" value="{{ profile.employment.current_company }}"></div>
+              <div class="field"><label>Current title</label><input name="current_title" value="{{ profile.employment.current_title }}"></div>
+              <div class="field"><label>Total years of experience</label><input name="total_years_experience" type="number" step="0.5" min="0" value="{{ profile.employment.total_years_experience }}"></div>
+              <div class="field"><label>Notice period (days)</label><input name="notice_period_days" type="number" min="0" value="{{ profile.employment.notice_period_days }}"></div>
+              <div class="field"><label>Current CTC</label><input name="current_ctc" placeholder="18 LPA" value="{{ profile.employment.current_ctc }}"></div>
+              <div class="field"><label>Expected CTC</label><input name="expected_ctc" placeholder="26 LPA" value="{{ profile.employment.expected_ctc }}"></div>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="eyebrow">Eligibility</div>
+            <div class="field">
+              <label>Authorized to work in (comma separated)</label>
+              <input name="authorized_to_work_in" placeholder="India" value="{{ profile.eligibility.authorized_to_work_in | join(', ') }}">
+            </div>
+            {# Four short options: a segmented control shows every choice at once
+               and takes one click instead of two — no popup to cover the page.
+               Radios underneath, so it posts exactly like the select did. #}
+            <div class="field">
+              <label id="workModeLabel">Preferred work mode</label>
+              <div class="seg" role="radiogroup" aria-labelledby="workModeLabel">
+                {% for value, text in [('', 'No preference'), ('remote', 'Remote'),
+                                       ('hybrid', 'Hybrid'), ('onsite', 'Onsite')] %}
+                  <input type="radio" id="wm-{{ loop.index }}" name="preferred_work_mode"
+                         value="{{ value }}"
+                         {{ 'checked' if profile.eligibility.preferred_work_mode == value }}>
+                  <label class="seg-opt" for="wm-{{ loop.index }}">{{ text }}</label>
+                {% endfor %}
+              </div>
+            </div>
+            <label class="check">
+              <input type="checkbox" name="requires_visa_sponsorship" {{ 'checked' if profile.eligibility.requires_visa_sponsorship }}>
+              I require visa sponsorship
+            </label>
+            <label class="check">
+              <input type="checkbox" name="willing_to_relocate" {{ 'checked' if profile.eligibility.willing_to_relocate }}>
+              I'm willing to relocate
+            </label>
+          </div>
+
+          <div style="margin-top:20px"><button class="btn" type="submit">Save details</button></div>
+        </form>
+      </div>
+    </details>
+
+  </div>
 </div>
+
+<style>
+  .stack { max-width: 900px; }
+  /* Flat accordion. Native <details>, so keyboard and screen-reader behaviour
+     is free and the page still works with the script disabled. */
+  .step { border-top: 2px solid var(--line); }
+  .step:last-child { border-bottom: 2px solid var(--line); }
+  .step > summary {
+    display: grid; grid-template-columns: 3rem 1fr auto;
+    align-items: center; gap: 16px; padding: 18px 4px;
+    cursor: pointer; list-style: none; user-select: none;
+  }
+  .step > summary::-webkit-details-marker { display: none; }
+  .step > summary:hover { background: var(--hover); }
+  .step > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .step-no {
+    font-family: var(--mono); font-size: 13px; color: var(--ink-55);
+    border: 1px solid var(--line); width: 2.4rem; height: 2.4rem;
+    display: grid; place-items: center;
+  }
+  .step-no.done { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .step-head { display: block; }
+  .step-title { display: block; font-weight: 800; font-size: 16px; }
+  .step-sub { display: block; color: var(--ink-55); font-size: 12px; margin-top: 2px; }
+  .step-body { padding: 4px 4px 28px; }
+  .hint { color: var(--ink-70); font-size: 13px; margin: 0 0 14px; max-width: 68ch; }
+  .siterow {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; padding: 14px 0; border-top: 1px solid var(--line-soft);
+  }
+  .dot { display: inline-block; width: 10px; height: 10px; background: var(--ink-45); }
+  .dot.ready { background: var(--accent); }
+  .dot.paused { background: var(--ink); }
+  .group { padding-top: 20px; }
+  .group + .group { border-top: 1px solid var(--line-soft); margin-top: 8px; }
+  .fields2 { display: grid; gap: 0 20px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 620px) { .fields2 { grid-template-columns: 1fr; } }
+</style>
 
 <script>
 (function () {
-  // Accordion: opening one panel closes the others, so the page stays short.
-  // Native <details> keeps keyboard and screen-reader behaviour intact, and
-  // the page still works with this script disabled — it just won't auto-close.
-  var panels = Array.prototype.slice.call(document.querySelectorAll('.stack > .panel3d'));
+  // Opening one panel closes the others, so the page stays short. The page
+  // still works without this — it just won't auto-close.
+  var panels = Array.prototype.slice.call(document.querySelectorAll('.stack > .step'));
   panels.forEach(function (panel) {
     panel.addEventListener('toggle', function () {
       if (!panel.open) return;

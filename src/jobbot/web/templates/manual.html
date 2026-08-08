@@ -3,52 +3,62 @@
 {% block title %}Manual queue — jobbot{% endblock %}
 
 {% block content %}
-{% if not jobs %}
-  <div class="empty">
-    <p>Manual queue is empty.</p>
-    <p>Approved jobs on portals we don't automate (Workday, Taleo, iCIMS…) land here.</p>
-  </div>
-{% else %}
-  <p class="company" style="margin-top:0">
-    These roles use application portals that aren't automated — a half-filled
-    Workday wizard is worse than two minutes of your time. Apply via the link,
-    then mark it so tracking stays accurate.
-  </p>
+<div class="screen">
+  <div class="kicker">Not automated</div>
+  <h1 class="title-lg" style="margin:0 0 6px">Manual queue</h1>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:3.5rem">Score</th>
-          <th>Role</th>
-          <th style="width:9rem">Portal</th>
-          <th style="width:10rem"></th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for job in jobs %}
-        <tr>
-          <td class="score">{{ job.score.fit_score if job.score else '—' }}</td>
-          <td>
-            <div class="title">
-              <a href="{{ job.ats_url or job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>
-            </div>
-            <div class="company">{{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}</div>
-          </td>
-          <td>
-            {% set label, tone = route_labels.get(job.apply_route, ('Unknown', 'muted')) %}
-            <span class="chip {{ tone }}">{{ job.ats_type or label }}</span>
-          </td>
-          <td>
-            <form method="post" action="/mark-applied">
-              <input type="hidden" name="job_id" value="{{ job.id }}">
-              <button type="submit" class="ghost">Mark as applied</button>
-            </form>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-{% endif %}
+  {% if not jobs %}
+    <div class="empty" style="padding-left:0">
+      <p>Manual queue is empty.</p>
+      <p>Approved jobs on portals we don't automate (Workday, Taleo, iCIMS…) land here.</p>
+    </div>
+  {% else %}
+    <p style="margin:0 0 24px;font-size:13px;color:var(--ink-70);max-width:70ch">
+      These roles use application portals that aren't automated — a half-filled
+      Workday wizard is worse than two minutes of your time. Apply via the link,
+      then mark it so tracking stays accurate.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:4rem">Score</th>
+            <th>Role</th>
+            <th style="width:11rem">Portal</th>
+            <th style="width:12rem"></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for job in jobs %}
+          <tr>
+            <td class="mono" style="font-size:20px;color:var(--ink-55)">
+              {{ job.score.fit_score if job.score else '—' }}
+            </td>
+            <td>
+              <div style="font-weight:800">
+                <a href="{{ job.ats_url or job.url }}" target="_blank" rel="noopener"
+                   style="color:var(--ink);text-decoration:none">{{ job.title }}</a>
+              </div>
+              <div class="mono" style="font-size:12px;color:var(--ink-55)">
+                {{ job.company }}{% if job.location %} · {{ job.location }}{% endif %}
+              </div>
+            </td>
+            <td>
+              {% set label, tone = route_labels.get(job.apply_route, ('Unknown', 'muted')) %}
+              <span class="tag {{ 'tag-warn' if tone == 'warn' else '' }}">{{ job.ats_type or label }}</span>
+            </td>
+            <td>
+              <form method="post" action="/mark-applied">
+                <input type="hidden" name="job_id" value="{{ job.id }}">
+                <button class="btn btn-secondary btn-sm" type="submit">Mark as applied</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
 {% endblock %}

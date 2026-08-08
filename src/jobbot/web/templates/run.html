@@ -3,22 +3,30 @@
 {% block title %}Run — jobbot{% endblock %}
 
 {% block content %}
-{% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+<div class="screen">
+  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
 
-<div class="grid">
+  <div class="kicker">Step 03 — Automate</div>
+  <h1 class="title-lg" style="margin:0 0 20px">Run the pipeline</h1>
 
-  <!-- 1. Discover ---------------------------------------------------- -->
-  <div class="card">
-    <h2>1 · Discover</h2>
-    <p class="hint">Scrape connected boards into the local database.</p>
-    {% if not ready.can_discover %}
-      <div class="banner warn">Connect at least one account on <a href="/setup">Setup</a> first.</div>
-    {% endif %}
-    <form method="post" action="/run">
-      <input type="hidden" name="command" value="discover">
-      <div class="field">
-        <label>Site</label>
-        <select name="site">
+  {% set approved = counts.get('approved', 0) %}
+
+  <div class="cells cells-3" style="margin-bottom:24px">
+
+    <!-- 01 Discover ------------------------------------------------- -->
+    <div class="cell stage">
+      <div class="stage-head">
+        <span class="mono stage-num">01</span>
+        <h3 class="stage-name">Discover</h3>
+        <span class="mono stage-status">{{ 'running' if running and 'iscover' in running.label else 'ready' }}</span>
+      </div>
+      <p class="stage-desc">Sweep the connected boards into the local database.</p>
+      {% if not ready.can_discover %}
+        <div class="stage-warn">Connect an account on <a href="/setup">Setup</a> first.</div>
+      {% endif %}
+      <form method="post" action="/run" class="stage-form">
+        <input type="hidden" name="command" value="discover">
+        <select name="site" aria-label="Site">
           <option value="">all enabled sites</option>
           {% for s in sites %}
             <option value="{{ s.site }}" {{ 'disabled' if not s.connected }}>
@@ -26,132 +34,171 @@
             </option>
           {% endfor %}
         </select>
-      </div>
-      <div class="field">
-        <label>Max new jobs (blank = the daily cap)</label>
-        <input name="limit" type="number" min="1" placeholder="5">
-      </div>
-      <button type="submit" {{ 'disabled' if running or not ready.can_discover }}>Run discover</button>
-    </form>
-    <p class="hint" style="margin-top:.7rem">
-      Start with a limit of 5 the first time. Scrapers need one calibration
-      pass per site, and a small run tells you fast whether selectors match.
-    </p>
-  </div>
-
-  <!-- 2. Score ------------------------------------------------------- -->
-  <div class="card">
-    <h2>2 · Score</h2>
-    <p class="hint">Rank unscored jobs against your resume with Claude.</p>
-    {% if not ready.can_score %}
-      <div class="banner warn">
-        Needs {% if not ready.resume_ok %}a resume{% endif %}
-        {% if not ready.resume_ok and not ready.api_key_ok %} and {% endif %}
-        {% if not ready.api_key_ok %}an API key{% endif %} — see <a href="/setup">Setup</a>.
-      </div>
-    {% endif %}
-    <form method="post" action="/run">
-      <input type="hidden" name="command" value="score">
-      <div class="field">
-        <label>Max jobs to score (blank = all pending)</label>
-        <input name="limit" type="number" min="1" placeholder="5">
-      </div>
-      <button type="submit" {{ 'disabled' if running or not ready.can_score }}>Run score</button>
-    </form>
-    <p class="hint" style="margin-top:.7rem">
-      Roughly $0.03–0.05 per job. The run reports its token spend and prompt-cache
-      hit ratio when it finishes.
-    </p>
-  </div>
-
-  <!-- 3. Apply ------------------------------------------------------- -->
-  <div class="card">
-    <h2>3 · Apply</h2>
-    <p class="hint">
-      Applies to jobs you approved on <a href="/review">Review</a>.
-      <strong>{{ counts.get('approved', 0) }}</strong> approved right now.
-    </p>
-    {% if not ready.can_apply %}
-      <div class="banner warn">Fill in your details and upload a resume on <a href="/setup">Setup</a> first.</div>
-    {% endif %}
-    <form method="post" action="/run" id="applyForm">
-      <input type="hidden" name="command" value="apply">
-      <div class="field">
-        <label>Max applications this run</label>
-        <input name="limit" type="number" min="1" placeholder="1">
-      </div>
-      <label class="check">
-        <input type="checkbox" name="submit" id="submitToggle">
-        Actually submit (otherwise it's a dry run)
-      </label>
-      <div id="confirmBox" style="display:none">
-        <div class="banner err" style="margin:.2rem 0 .5rem">
-          This sends real applications to real employers under your name.
-        </div>
-        <label class="check">
-          <input type="checkbox" name="confirm" value="yes" id="confirmToggle">
-          I've reviewed these and want them sent.
-        </label>
-      </div>
-      <button type="submit" id="applyBtn" {{ 'disabled' if running or not ready.can_apply }}>
-        Run dry run
-      </button>
-    </form>
-    <p class="hint" style="margin-top:.7rem">
-      A dry run fills every field and stops at the submit button, saving a
-      screenshot to <code>data/evidence/</code>. Check one before submitting
-      for real.
-    </p>
-  </div>
-</div>
-
-<!-- Console ---------------------------------------------------------- -->
-<div class="card" style="margin-top:1rem">
-  <div class="runbar">
-    <h2 style="margin:0">Output</h2>
-    {% if running %}
-      <span class="chip"><span class="spinner"></span> {{ running.label }}</span>
-      <form method="post" action="/run/stop" style="margin-left:auto">
-        <button type="submit" class="danger">Stop</button>
+        <input name="limit" type="number" min="1" placeholder="limit (blank = daily cap)" aria-label="Limit">
+        <button class="btn btn-secondary btn-sm btn-block" type="submit"
+                {{ 'disabled' if running or not ready.can_discover }}>Run discover</button>
       </form>
-    {% elif shown %}
-      <span class="chip">{{ shown.label }}</span>
-      {% if shown.ok %}<span class="chip ok">finished ok</span>
-      {% else %}<span class="chip bad">exit {{ shown.returncode }}</span>{% endif %}
-      <span class="chip">{{ shown.duration }}</span>
-    {% else %}
-      <span class="chip">idle</span>
-    {% endif %}
+    </div>
+
+    <!-- 02 Score ---------------------------------------------------- -->
+    <div class="cell stage">
+      <div class="stage-head">
+        <span class="mono stage-num">02</span>
+        <h3 class="stage-name">Score</h3>
+        <span class="mono stage-status">{{ 'running' if running and 'core' in running.label else 'ready' }}</span>
+      </div>
+      <p class="stage-desc">Rank every unscored posting against your resume.</p>
+      {% if not ready.can_score %}
+        <div class="stage-warn">
+          Needs {% if not ready.resume_ok %}a resume{% endif %}
+          {%- if not ready.resume_ok and not ready.api_key_ok %} and {% endif %}
+          {%- if not ready.api_key_ok %}an API key{% endif %} — see <a href="/setup">Setup</a>.
+        </div>
+      {% endif %}
+      <div class="mono stage-detail">claude-opus-5 · ~$0.04 per job</div>
+      <form method="post" action="/run" class="stage-form">
+        <input type="hidden" name="command" value="score">
+        <input name="limit" type="number" min="1" placeholder="limit (blank = all pending)" aria-label="Limit">
+        <button class="btn btn-secondary btn-sm btn-block" type="submit"
+                {{ 'disabled' if running or not ready.can_score }}>Run score</button>
+      </form>
+    </div>
+
+    <!-- 03 Apply ---------------------------------------------------- -->
+    <div class="cell stage">
+      <div class="stage-head">
+        <span class="mono stage-num">03</span>
+        <h3 class="stage-name">Apply</h3>
+        <span class="mono stage-status">
+          {{ 'running' if running and 'pply' in running.label else (approved ~ ' queued' if approved else 'nothing queued') }}
+        </span>
+      </div>
+      <p class="stage-desc">Fill the forms for jobs you approved on <a href="/review">Review</a>.</p>
+      {% if not ready.can_apply %}
+        <div class="stage-warn">Fill in your details and upload a resume on <a href="/setup">Setup</a>.</div>
+      {% endif %}
+      <div class="mono stage-detail">max {{ limits.per_day }}/day · {{ limits.per_company }} per company per week</div>
+      {# The controls live in the panel below-right, so this button drives that
+         form by id — one gate, not two that can disagree. #}
+      <button class="btn btn-secondary btn-sm btn-block" type="submit" form="applyForm"
+              {{ 'disabled' if running or not ready.can_apply }}>
+        {{ 'Apply to ' ~ approved if approved else 'Nothing to apply to' }}
+      </button>
+    </div>
   </div>
 
-  {# A live task is filled by the stream, which replays from the first line —
-     pre-rendering it here too would double every line. #}
-  <pre class="console" id="console">{% if shown and not shown.running %}{% for line in shown.lines %}{{ line }}
+  <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px" class="run-split">
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <h2 style="margin:0;font-size:20px">Output</h2>
+        {% if running %}
+          <span class="tag tag-accent mono">{{ running.label }}</span>
+        {% elif shown %}
+          <span class="tag mono">{{ shown.label }}</span>
+          {% if shown.ok %}<span class="tag mono">finished ok</span>
+          {% else %}<span class="tag tag-bad mono">exit {{ shown.returncode }}</span>{% endif %}
+          <span class="tag mono">{{ shown.duration }}</span>
+        {% else %}
+          <span class="tag mono">idle</span>
+        {% endif %}
+        {% if running %}
+          <form method="post" action="/run/stop" style="margin-left:auto">
+            <button class="btn btn-secondary btn-sm" type="submit">Stop</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {# A live task is filled by the stream, which replays from the first
+         line — pre-rendering it here too would double every line. #}
+      <pre class="console" id="console">{% if shown and not shown.running %}{% for line in shown.lines %}{{ line }}
 {% endfor %}{% endif %}</pre>
 
-  {% if history %}
-    <h3>Recent runs</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Command</th><th style="width:6rem">Result</th><th style="width:6rem">Took</th><th style="width:10rem">Started</th></tr></thead>
-        <tbody>
-        {% for t in history %}
-          <tr {% if shown and t.id == shown.id %}style="background:var(--chip)"{% endif %}>
-            <td><a href="/run?task={{ t.id }}">{{ t.label }}</a></td>
-            <td>
-              {% if t.running %}<span class="chip">running</span>
-              {% elif t.ok %}<span class="chip ok">ok</span>
-              {% else %}<span class="chip bad">exit {{ t.returncode }}</span>{% endif %}
-            </td>
-            <td>{{ t.duration }}</td>
-            <td class="company">{{ t.started_at.strftime('%b %d, %H:%M') }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+      {% if history %}
+        <div class="eyebrow" style="margin-top:24px">Recent runs</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Command</th><th style="width:7rem">Result</th><th style="width:6rem">Took</th><th style="width:10rem">Started</th></tr></thead>
+            <tbody>
+            {% for t in history %}
+              <tr {% if shown and t.id == shown.id %}style="background:var(--hover)"{% endif %}>
+                <td><a href="/run?task={{ t.id }}">{{ t.label }}</a></td>
+                <td>
+                  {% if t.running %}<span class="tag tag-accent">running</span>
+                  {% elif t.ok %}<span class="tag">ok</span>
+                  {% else %}<span class="tag tag-bad">exit {{ t.returncode }}</span>{% endif %}
+                </td>
+                <td class="mono">{{ t.duration }}</td>
+                <td class="mono" style="color:var(--ink-55)">{{ t.started_at.strftime('%b %d, %H:%M') }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
     </div>
-  {% endif %}
+
+    <div>
+      <div style="border:2px solid var(--accent);padding:16px">
+        <div style="font-weight:800;font-size:16px;margin-bottom:8px">Submit for real</div>
+        <p style="font-size:12px;color:var(--ink-75);margin:0 0 12px">
+          A dry run fills every field, screenshots the page and stops at the
+          submit button. Nothing reaches an employer until both switches below
+          are on.
+        </p>
+        <form method="post" action="/run" id="applyForm">
+          <input type="hidden" name="command" value="apply">
+          <label class="lbl" for="applyLimit">Max applications this run</label>
+          <input id="applyLimit" name="limit" type="number" min="1" placeholder="blank = the daily cap">
+
+          <label class="check" style="margin-top:10px">
+            <input type="checkbox" name="submit" id="submitToggle">
+            Actually submit applications
+          </label>
+
+          <div id="confirmBox" style="display:none">
+            <div style="background:var(--tint);color:var(--tint-fg);font-size:12px;padding:10px 12px;margin:6px 0">
+              This sends real applications to real employers under your name.
+            </div>
+            <label class="check">
+              <input type="checkbox" name="confirm" value="yes" id="confirmToggle">
+              I reviewed these and want them sent.
+            </label>
+          </div>
+
+          <button class="btn btn-ink btn-block" type="submit" id="applyBtn" style="margin-top:8px"
+                  {{ 'disabled' if running or not ready.can_apply }}>Run dry run</button>
+        </form>
+      </div>
+
+      <div style="margin-top:20px">
+        <div class="eyebrow">Safety limits</div>
+        {% for l in limits.rows %}
+          <div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:8px 0;border-top:1px solid var(--line-soft)">
+            <span style="color:var(--ink-70)">{{ l.label }}</span>
+            <span class="mono">{{ l.value }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
 </div>
+
+<style>
+  .stage { display: flex; flex-direction: column; gap: 10px; padding: 20px; }
+  .stage-head { display: flex; align-items: baseline; gap: 10px; }
+  .stage-num { font-size: 12px; color: var(--accent); }
+  .stage-name { margin: 0; font-size: 20px; }
+  .stage-status { margin-left: auto; font-size: 11px; color: var(--ink-55); }
+  .stage-desc { margin: 0; font-size: 13px; color: var(--ink-70); }
+  .stage-detail { font-size: 11px; color: var(--ink-55); }
+  .stage-warn { font-size: 12px; color: var(--tint-fg); background: var(--tint); padding: 8px 10px; }
+  .stage-form { margin-top: auto; display: grid; gap: 8px; }
+  .stage-form input, .stage-form select { font-size: 13px; }
+  @media (max-width: 980px) {
+    .cells-3 { grid-template-columns: 1fr; }
+    .run-split { grid-template-columns: 1fr !important; }
+  }
+</style>
 
 <script>
 (function () {
@@ -164,7 +211,7 @@
     toggle.addEventListener('change', function () {
       box.style.display = toggle.checked ? 'block' : 'none';
       btn.textContent = toggle.checked ? 'Submit applications' : 'Run dry run';
-      btn.classList.toggle('danger', toggle.checked);
+      btn.classList.toggle('btn-ink', !toggle.checked);
       if (!toggle.checked) document.getElementById('confirmToggle').checked = false;
     });
   }

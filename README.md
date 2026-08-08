@@ -293,11 +293,22 @@ tests/           447 tests, no network
 | Page | What it's for |
 |---|---|
 | **Home** | Pipeline donut — what's pending, queued, submitted |
-| **Setup** | Connect job boards, upload your resume, fill in your details |
-| **Run** | Trigger discover / score / apply, with live streamed output |
+| **Search** | Define the shared sweep: keywords, boards, freshness, prefilter |
 | **Review** | Ranked jobs with Claude's reasoning — approve or skip |
+| **Run** | Trigger discover / score / apply, with live streamed output |
+| **Applications** | Every attempt and its evidence — sent, dry run, or failed |
 | **Needs input** | Applications parked on a question only you can answer |
 | **Manual** | Portals that aren't automated, with a link and a done button |
+
+The interface is built on a flat, architectural design system — Archivo, a
+single red accent, zero corner radius, and 2px rules doing the organising.
+The webfont is vendored under `src/jobbot/web/static/`, not linked from a CDN,
+so the dashboard still renders with no network.
+
+**Search** writes `config/search.yaml`. It models *one* sweep shared across
+every board, while the file models a query list per site — so saving replaces
+those lists. The screen names exactly what it is about to drop before you
+save it.
 
 It binds to `127.0.0.1` and has no authentication, which is fine for a local
 tool and **not** fine on a shared or public machine — it shows your resume

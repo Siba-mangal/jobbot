@@ -77,8 +77,10 @@ class TestPagesRender:
         assert "Backend Engineer" in response.text
 
     def test_empty_state_points_at_the_next_step(self, client):
-        response = client.get("/review")
-        assert "Run discover" in response.text
+        # Pinned on the link target, not the label: the wording is design
+        # surface and has already changed once, but an empty Review page that
+        # offers no route to discovery is the actual defect.
+        assert 'href="/search"' in client.get("/review").text
 
     def test_empty_state_explains_unscored_jobs(self, client):
         """An empty Review page with jobs sitting one step upstream is the
@@ -90,7 +92,10 @@ class TestPagesRender:
 
         text = client.get("/review").text
         assert "not scored yet" in text
-        assert "review them unscored" in text  # the escape hatch
+        # The escape hatch, pinned on where it goes rather than what it says:
+        # status=new with no score floor is the only view that shows them.
+        assert "status=new" in text and "min_score=0" in text
+        assert "unscored" in text.lower()
 
     def test_unscored_jobs_are_reviewable_without_a_score(self, client):
         # Approving without scoring is a legitimate path — it's how you test
