@@ -10,11 +10,18 @@ from ..resume import get_resume_text
 from .matcher import ScoringStats, to_score_row
 from .providers import build_scorer
 
+#: Statuses a job can be scored from. Deliberately wider than NEW: approving
+#: a job before a scorer was available is an ordinary thing to do (and the
+#: review page invites it), and a job approved-but-unscored used to be
+#: unreachable forever — 74 of them in one real database. Terminal and
+#: in-flight states are excluded because a score would change nothing.
+SCORABLE = (AppStatus.NEW, AppStatus.SCORED, AppStatus.APPROVED)
+
 
 def pending_jobs(limit: int | None = None, *, rescore: bool = False) -> list[Job]:
     """Jobs awaiting a score, newest first."""
     with session_scope() as session:
-        stmt = select(Job).where(Job.status == AppStatus.NEW)
+        stmt = select(Job).where(Job.status.in_(SCORABLE))
         if not rescore:
             stmt = stmt.where(~Job.id.in_(select(Score.job_id)))
         stmt = stmt.order_by(Job.scraped_at.desc())
@@ -93,8 +100,11 @@ def score_pending(
                 if result.score.is_disqualified:
                     job.status = AppStatus.SKIPPED
                     job.skip_reason = "; ".join(result.score.blockers) or "disqualified"
-                else:
+                elif job.status == AppStatus.NEW:
                     job.status = AppStatus.SCORED
+                # Anything already past NEW keeps its status. Scoring an
+                # approved job must not silently un-approve it and drop it out
+                # of the apply queue.
 
         session.add(
             Run(

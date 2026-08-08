@@ -274,3 +274,33 @@ class TestToScoreRow:
         assert row.verdict is Verdict.POSSIBLE
         assert row.strengths == VALID["strengths"]
         assert row.model == "claude-opus-5"
+
+
+class TestWhichJobsAreScorable:
+    """Approving before scoring must not strand a job forever.
+
+    The review page invites approving unscored jobs ("you can approve and
+    apply without a score"), and someone who had not set up a key yet did
+    exactly that to 74 of them. The scorer only looked at NEW, so those 74
+    could never be scored — not even with --rescore, which only relaxes the
+    has-no-score filter, not the status one.
+    """
+
+    def test_approved_jobs_are_scorable(self):
+        from jobbot.db import AppStatus
+        from jobbot.scoring.runner import SCORABLE
+
+        assert AppStatus.APPROVED in SCORABLE
+        assert AppStatus.NEW in SCORABLE
+
+    def test_terminal_and_in_flight_states_are_not_scorable(self):
+        from jobbot.db import AppStatus
+        from jobbot.scoring.runner import SCORABLE
+
+        for status in (
+            AppStatus.SUBMITTED,
+            AppStatus.SKIPPED,
+            AppStatus.APPLYING,
+            AppStatus.FAILED,
+        ):
+            assert status not in SCORABLE, f"{status} would be re-scored pointlessly"

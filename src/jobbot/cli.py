@@ -20,10 +20,10 @@ from rich.table import Table
 from . import __version__
 from .config import (
     CONFIG_DIR,
-    anthropic_api_key,
     ensure_data_dirs,
     load_profile,
     load_search_config,
+    scoring_api_key,
 )
 from .db import AppStatus, Job, init_db, session_scope
 from .scrapers.registry import SCRAPERS, get_scraper
@@ -132,13 +132,17 @@ def init() -> None:
     except Exception as exc:
         _fail(f"Could not parse resume: {exc}")
 
-    # API key
-    if anthropic_api_key():
-        _ok("ANTHROPIC_API_KEY found.")
+    # Model access, for whichever provider scoring is pointed at.
+    model_cfg = load_search_config().model
+    if not model_cfg.needs_key():
+        _ok(f"{model_cfg.preset['label']} needs no key — it runs locally.")
+    elif scoring_api_key(model_cfg):
+        _ok(f"{model_cfg.key_env()} found ({model_cfg.preset['label']}).")
     else:
         _warn(
-            "ANTHROPIC_API_KEY not set. Scoring needs it.\n"
-            "    Put it in .env as ANTHROPIC_API_KEY=sk-ant-... , or run `ant auth login`."
+            f"{model_cfg.key_env()} not set. Scoring with "
+            f"{model_cfg.preset['label']} needs it.\n"
+            f"    Put it in .env as {model_cfg.key_env()}=..."
         )
 
     # Playwright browsers. Checked on disk rather than by launching the driver,
@@ -323,14 +327,21 @@ def score(
         _fail("--batch and --live are mutually exclusive.")
         raise typer.Exit(1)
 
-    if not anthropic_api_key():
+    search_cfg = load_search_config()
+
+    # Gate on the *configured* provider, not on Anthropic. This check used to
+    # demand ANTHROPIC_API_KEY regardless, which blocked scoring for anyone
+    # pointed at OpenAI, Gemini, or a local model — including through the web
+    # Run button, which shells out to this command.
+    model_cfg = search_cfg.model
+    if model_cfg.needs_key() and not scoring_api_key(model_cfg):
         _fail(
-            "ANTHROPIC_API_KEY is not set.\n"
-            "    Put it in .env as ANTHROPIC_API_KEY=sk-ant-... , or run `ant auth login`."
+            f"{model_cfg.key_env()} is not set, and model.provider is "
+            f"'{model_cfg.provider}'.\n"
+            f"    Put it in .env as {model_cfg.key_env()}=... , or change "
+            "model.provider in config/search.yaml."
         )
         raise typer.Exit(1)
-
-    search_cfg = load_search_config()
 
     try:
         load_profile()
@@ -409,10 +420,11 @@ def apply(
             console.print(f"    missing: {item}")
         raise typer.Exit(1)
 
-    if not anthropic_api_key():
+    draft_cfg = load_search_config().model
+    if draft_cfg.needs_key() and not scoring_api_key(draft_cfg):
         _warn(
-            "ANTHROPIC_API_KEY is not set — open-ended questions can't be drafted "
-            "and will park for you to answer by hand."
+            f"{draft_cfg.key_env()} is not set — open-ended questions can't be "
+            "drafted and will park for you to answer by hand."
         )
 
     from .appliers.runner import apply_to_approved, approved_jobs
