@@ -30,8 +30,18 @@ risk — a real logged-in browser session, randomized human-scale pacing, hard
 daily caps, and a circuit breaker that stops a site the moment it shows any
 sign of noticing — but it does not eliminate it.
 
-Enabling LinkedIn is a deliberate choice, not a default. Account restriction
-is a real possible outcome.
+**This repository ships with LinkedIn enabled**, because its author opted in
+knowingly — the warning sits in `config/search.yaml` next to the flag itself.
+That is a decision about one person's own account, not a recommendation. If
+you clone this, make the call yourself before your first run:
+
+```yaml
+sites:
+  linkedin:
+    enabled: false
+```
+
+Account restriction is a real possible outcome.
 
 ---
 
@@ -315,7 +325,7 @@ in either hours or days:
 ```yaml
 sites:
   linkedin:
-    enabled: false          # see the warning at the top
+    enabled: true           # see the warning at the top before you run this
     daily_cap: 40
     queries:
       - label: "Fresh — last hour"
