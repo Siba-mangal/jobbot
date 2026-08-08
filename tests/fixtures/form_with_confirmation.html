@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Apply — Backend Engineer</title></head>
+<body>
+<!-- Submitting swaps in a confirmation, so the applier's verify step has
+     something real to detect. Without a confirmation the applier reports
+     failure rather than claiming a submission it can't prove. -->
+<form id="application_form"
+      onsubmit="document.body.innerHTML='<h1>Thank you for applying</h1>'; return false;">
+  <label for="first_name">First Name *</label>
+  <input type="text" id="first_name" name="first_name" required>
+
+  <label for="last_name">Last Name *</label>
+  <input type="text" id="last_name" name="last_name" required>
+
+  <label for="email">Email *</label>
+  <input type="email" id="email" name="email" required>
+
+  <label for="ctc">Expected CTC *</label>
+  <input type="text" id="ctc" name="expected_ctc" required>
+
+  <input type="file" id="resume" name="resume">
+
+  <button type="submit" id="submit_app">Submit Application</button>
+</form>
+</body>
+</html>

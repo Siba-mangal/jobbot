@@ -1,0 +1,33 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# ---------------------------------------------------------------------------
+# Runtime data — NEVER commit.
+#
+# Deny-by-default rather than an allow-list of known filenames. This directory
+# holds live logged-in browser sessions (equivalent to your passwords), your
+# resume, the job database, and application screenshots. Listing files
+# individually means any new artifact type silently becomes committable.
+# ---------------------------------------------------------------------------
+data/*
+!data/.gitkeep
+
+# Your personal facts and your approved answer bank.
+config/profile.yaml
+config/answers.yaml
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store

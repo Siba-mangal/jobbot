@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% set page = "needs" %}
+{% block title %}Needs input — jobbot{% endblock %}
+
+{% block content %}
+{% if not jobs %}
+  <div class="empty">
+    <p>Nothing waiting on you.</p>
+    <p>Applications land here when a form asks something your profile doesn't answer.</p>
+  </div>
+{% else %}
+  <p class="company" style="margin-top:0">
+    These applications are paused mid-form. Nothing is fabricated on your behalf —
+    answer once and it's reused on every later application.
+  </p>
+
+  {% for job in jobs %}
+    {% set app = job.application %}
+    <div class="card">
+      <div class="title">
+        <a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a>
+      </div>
+      <div class="company">
+        {{ job.company }}
+        {% if job.score %} · score {{ job.score.fit_score }}{% endif %}
+        {% if job.location %} · {{ job.location }}{% endif %}
+      </div>
+
+      {% for q in (app.pending_questions if app else []) %}
+        <form method="post" action="/answer" style="margin-top:.9rem">
+          <input type="hidden" name="job_id" value="{{ job.id }}">
+          <input type="hidden" name="question" value="{{ q.question }}">
+          <label style="display:block; font-weight:600; margin-bottom:.35rem">
+            {{ q.question }}
+            {% if q.required %}<span class="chip bad">required</span>{% endif %}
+            {% if q.kind and q.kind != 'text' %}<span class="chip">{{ q.kind }}</span>{% endif %}
+          </label>
+
+          {% if q.options %}
+            <select name="answer">
+              {% for opt in q.options %}<option value="{{ opt }}">{{ opt }}</option>{% endfor %}
+            </select>
+          {% elif q.draft %}
+            <textarea name="answer">{{ q.draft }}</textarea>
+            <div class="company" style="font-size:.8rem">
+              Drafted from your resume and this job description — edit before saving.
+            </div>
+          {% else %}
+            <textarea name="answer" placeholder="Your answer"></textarea>
+          {% endif %}
+
+          <div style="margin-top:.5rem">
+            <button type="submit">Save &amp; resume</button>
+          </div>
+        </form>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

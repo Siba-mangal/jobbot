@@ -1,0 +1,45 @@
+# Copy to config/profile.yaml and fill in. This file holds the FACTS about you.
+#
+# These values are the ONLY source for factual application answers. The bot
+# never generates a factual answer — if a form asks something not covered
+# here, the application is parked for you to answer rather than guessed at.
+
+identity:
+  first_name: ""
+  last_name: ""
+  email: ""
+  phone: ""            # include country code, e.g. "+91 98765 43210"
+  city: ""
+  country: ""
+
+links:
+  linkedin: ""
+  github: ""
+  portfolio: ""
+
+employment:
+  current_company: ""
+  current_title: ""
+  total_years_experience: 0      # number, e.g. 5.5
+  notice_period_days: 0          # number, e.g. 30
+  current_ctc: ""                # free text as you'd type it, e.g. "18 LPA"
+  expected_ctc: ""               # e.g. "26 LPA"
+
+eligibility:
+  # Answers to the standard screening questions. Use exactly the wording you
+  # would type on a real form.
+  authorized_to_work_in: []      # e.g. ["India"]
+  requires_visa_sponsorship: false
+  willing_to_relocate: false
+  preferred_work_mode: ""        # "remote" | "hybrid" | "onsite"
+
+documents:
+  resume_path: "data/resume.pdf"
+  cover_letter_template_path: ""  # optional; leave blank to have Claude draft per-job
+
+# Free-text answers you're happy to reuse verbatim. Anything not here that a
+# form asks for gets drafted by Claude and queued for your approval first.
+standard_answers:
+  why_this_company: ""
+  greatest_strength: ""
+  salary_expectation_note: ""

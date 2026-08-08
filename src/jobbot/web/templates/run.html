@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% set page = "run" %}
+{% block title %}Run — jobbot{% endblock %}
+
+{% block content %}
+{% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+
+<div class="grid">
+
+  <!-- 1. Discover ---------------------------------------------------- -->
+  <div class="card">
+    <h2>1 · Discover</h2>
+    <p class="hint">Scrape connected boards into the local database.</p>
+    {% if not ready.can_discover %}
+      <div class="banner warn">Connect at least one account on <a href="/setup">Setup</a> first.</div>
+    {% endif %}
+    <form method="post" action="/run">
+      <input type="hidden" name="command" value="discover">
+      <div class="field">
+        <label>Site</label>
+        <select name="site">
+          <option value="">all enabled sites</option>
+          {% for s in sites %}
+            <option value="{{ s.site }}" {{ 'disabled' if not s.connected }}>
+              {{ s.site }}{{ '' if s.connected else ' — not connected' }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Max new jobs (blank = the daily cap)</label>
+        <input name="limit" type="number" min="1" placeholder="5">
+      </div>
+      <button type="submit" {{ 'disabled' if running or not ready.can_discover }}>Run discover</button>
+    </form>
+    <p class="hint" style="margin-top:.7rem">
+      Start with a limit of 5 the first time. Scrapers need one calibration
+      pass per site, and a small run tells you fast whether selectors match.
+    </p>
+  </div>
+
+  <!-- 2. Score ------------------------------------------------------- -->
+  <div class="card">
+    <h2>2 · Score</h2>
+    <p class="hint">Rank unscored jobs against your resume with Claude.</p>
+    {% if not ready.can_score %}
+      <div class="banner warn">
+        Needs {% if not ready.resume_ok %}a resume{% endif %}
+        {% if not ready.resume_ok and not ready.api_key_ok %} and {% endif %}
+        {% if not ready.api_key_ok %}an API key{% endif %} — see <a href="/setup">Setup</a>.
+      </div>
+    {% endif %}
+    <form method="post" action="/run">
+      <input type="hidden" name="command" value="score">
+      <div class="field">
+        <label>Max jobs to score (blank = all pending)</label>
+        <input name="limit" type="number" min="1" placeholder="5">
+      </div>
+      <button type="submit" {{ 'disabled' if running or not ready.can_score }}>Run score</button>
+    </form>
+    <p class="hint" style="margin-top:.7rem">
+      Roughly $0.03–0.05 per job. The run reports its token spend and prompt-cache
+      hit ratio when it finishes.
+    </p>
+  </div>
+
+  <!-- 3. Apply ------------------------------------------------------- -->
+  <div class="card">
+    <h2>3 · Apply</h2>
+    <p class="hint">
+      Applies to jobs you approved on <a href="/review">Review</a>.
+      <strong>{{ counts.get('approved', 0) }}</strong> approved right now.
+    </p>
+    {% if not ready.can_apply %}
+      <div class="banner warn">Fill in your details and upload a resume on <a href="/setup">Setup</a> first.</div>
+    {% endif %}
+    <form method="post" action="/run" id="applyForm">
+      <input type="hidden" name="command" value="apply">
+      <div class="field">
+        <label>Max applications this run</label>
+        <input name="limit" type="number" min="1" placeholder="1">
+      </div>
+      <label class="check">
+        <input type="checkbox" name="submit" id="submitToggle">
+        Actually submit (otherwise it's a dry run)
+      </label>
+      <div id="confirmBox" style="display:none">
+        <div class="banner err" style="margin:.2rem 0 .5rem">
+          This sends real applications to real employers under your name.
+        </div>
+        <label class="check">
+          <input type="checkbox" name="confirm" value="yes" id="confirmToggle">
+          I've reviewed these and want them sent.
+        </label>
+      </div>
+      <button type="submit" id="applyBtn" {{ 'disabled' if running or not ready.can_apply }}>
+        Run dry run
+      </button>
+    </form>
+    <p class="hint" style="margin-top:.7rem">
+      A dry run fills every field and stops at the submit button, saving a
+      screenshot to <code>data/evidence/</code>. Check one before submitting
+      for real.
+    </p>
+  </div>
+</div>
+
+<!-- Console ---------------------------------------------------------- -->
+<div class="card" style="margin-top:1rem">
+  <div class="runbar">
+    <h2 style="margin:0">Output</h2>
+    {% if running %}
+      <span class="chip"><span class="spinner"></span> {{ running.label }}</span>
+      <form method="post" action="/run/stop" style="margin-left:auto">
+        <button type="submit" class="danger">Stop</button>
+      </form>
+    {% elif shown %}
+      <span class="chip">{{ shown.label }}</span>
+      {% if shown.ok %}<span class="chip ok">finished ok</span>
+      {% else %}<span class="chip bad">exit {{ shown.returncode }}</span>{% endif %}
+      <span class="chip">{{ shown.duration }}</span>
+    {% else %}
+      <span class="chip">idle</span>
+    {% endif %}
+  </div>
+
+  {# A live task is filled by the stream, which replays from the first line —
+     pre-rendering it here too would double every line. #}
+  <pre class="console" id="console">{% if shown and not shown.running %}{% for line in shown.lines %}{{ line }}
+{% endfor %}{% endif %}</pre>
+
+  {% if history %}
+    <h3>Recent runs</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th style="width:6rem">Result</th><th style="width:6rem">Took</th><th style="width:10rem">Started</th></tr></thead>
+        <tbody>
+        {% for t in history %}
+          <tr {% if shown and t.id == shown.id %}style="background:var(--chip)"{% endif %}>
+            <td><a href="/run?task={{ t.id }}">{{ t.label }}</a></td>
+            <td>
+              {% if t.running %}<span class="chip">running</span>
+              {% elif t.ok %}<span class="chip ok">ok</span>
+              {% else %}<span class="chip bad">exit {{ t.returncode }}</span>{% endif %}
+            </td>
+            <td>{{ t.duration }}</td>
+            <td class="company">{{ t.started_at.strftime('%b %d, %H:%M') }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  // Reveal the confirmation gate only when a real submit is requested, and
+  // keep the button label honest about what it will do.
+  var toggle = document.getElementById('submitToggle');
+  var box = document.getElementById('confirmBox');
+  var btn = document.getElementById('applyBtn');
+  if (toggle) {
+    toggle.addEventListener('change', function () {
+      box.style.display = toggle.checked ? 'block' : 'none';
+      btn.textContent = toggle.checked ? 'Submit applications' : 'Run dry run';
+      btn.classList.toggle('danger', toggle.checked);
+      if (!toggle.checked) document.getElementById('confirmToggle').checked = false;
+    });
+  }
+
+  // Stream output, but only when the panel is showing a live task — viewing
+  // a finished run from the history must not tail a different one.
+  var out = document.getElementById('console');
+  var liveId = {{ ('"' + shown.id + '"') if (shown and shown.running) else 'null' }};
+  if (!out || !liveId) return;
+
+  var src = new EventSource('/run/stream?task_id=' + liveId);
+  src.onmessage = function (e) {
+    var atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 40;
+    out.textContent += e.data + '\n';
+    if (atBottom) out.scrollTop = out.scrollHeight;
+  };
+  src.addEventListener('done', function () {
+    src.close();
+    // Reload so the buttons re-enable and the run history updates.
+    setTimeout(function () { window.location.href = '/run'; }, 900);
+  });
+  src.onerror = function () { src.close(); };
+})();
+</script>
+{% endblock %}

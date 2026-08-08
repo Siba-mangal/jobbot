@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Apply — Backend Engineer</title></head>
+<body>
+<div id="grnhse_app">
+  <form id="application_form">
+    <!-- explicit label[for] -->
+    <label for="first_name">First Name *</label>
+    <input type="text" id="first_name" name="job_application[first_name]" required>
+
+    <label for="last_name">Last Name *</label>
+    <input type="text" id="last_name" name="job_application[last_name]" required>
+
+    <!-- email / tel types -->
+    <label for="email">Email *</label>
+    <input type="email" id="email" name="job_application[email]" required>
+
+    <label for="phone">Phone</label>
+    <input type="tel" id="phone" name="job_application[phone]">
+
+    <!-- file input, no label -->
+    <input type="file" id="resume" name="job_application[resume]">
+
+    <!-- select with options -->
+    <label for="visa">Do you require visa sponsorship? *</label>
+    <select id="visa" name="job_application[answers][visa]" required>
+      <option value="">Select...</option>
+      <option>Yes</option>
+      <option>No</option>
+    </select>
+
+    <!-- textarea via aria-label -->
+    <textarea aria-label="Why do you want to work here?" name="job_application[answers][why]"></textarea>
+
+    <!-- wrapping label -->
+    <label>Expected CTC
+      <input type="text" name="job_application[answers][ctc]">
+    </label>
+
+    <!-- number -->
+    <label for="years">Years of experience</label>
+    <input type="number" id="years" name="job_application[answers][years]">
+
+    <!-- radio group -->
+    <fieldset>
+      <legend>Are you willing to relocate?</legend>
+      <label><input type="radio" name="relocate" value="Yes"> Yes</label>
+      <label><input type="radio" name="relocate" value="No"> No</label>
+    </fieldset>
+
+    <!-- checkbox -->
+    <label for="terms">I agree to the privacy policy</label>
+    <input type="checkbox" id="terms" name="terms">
+
+    <!-- must all be ignored -->
+    <input type="hidden" name="authenticity_token" value="abc">
+    <input type="text" name="disabled_field" disabled>
+    <input type="text" name="hidden_by_css" style="display:none">
+    <input type="submit" value="Submit Application">
+    <button type="submit" id="submit_app">Submit Application</button>
+  </form>
+</div>
+</body>
+</html>

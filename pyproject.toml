@@ -1,0 +1,58 @@
+[project]
+name = "jobbot"
+version = "0.1.0"
+description = "Scrape, score, and apply to jobs matched against your resume"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.69",
+    "playwright>=1.49",
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+    "typer>=0.15",
+    "rich>=13.9",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.20",
+    "pypdf>=5.1",
+    "python-docx>=1.1",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+]
+
+[project.scripts]
+jobbot = "jobbot.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "ruff>=0.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jobbot"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Typer's and FastAPI's APIs are function calls in argument defaults by design.
+"src/jobbot/cli.py" = ["B008"]
+"src/jobbot/web/app.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

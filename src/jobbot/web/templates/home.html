@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% set page = "home" %}
+{% block title %}jobbot{% endblock %}
+
+{% set p = pipeline %}
+{% set TONE = {'neutral': 'var(--viz-neutral)', 'warn': 'var(--viz-warn)',
+               'queued': 'var(--viz-queued)', 'done': 'var(--viz-done)'} %}
+{% set LINK = {'to_review': '/review?status=new&min_score=0', 'needs_you': '/needs-input',
+               'queued': '/applications', 'submitted': '/applications?show=sent'} %}
+
+{% block content %}
+
+<!-- Hero ------------------------------------------------------------- -->
+<section class="hero">
+  <div>
+    <h1>Apply to the jobs worth applying to.</h1>
+    <p class="lede">
+      jobbot scrapes the boards you've connected, scores every posting against
+      your resume, and fills the applications you approve. Nothing is ever sent
+      without you ticking it first.
+    </p>
+    <div class="cta">
+      {% if not ready.any_site_connected %}
+        <a href="/setup">Connect a job board →</a>
+      {% elif p.to_review %}
+        <a href="/review">Review {{ p.to_review }} job{{ 's' if p.to_review != 1 }} →</a>
+      {% elif p.queued %}
+        <a href="/run">Apply to {{ p.queued }} queued →</a>
+      {% else %}
+        <a href="/run">Find more jobs →</a>
+      {% endif %}
+      <a href="/run" class="ghost">Run the pipeline</a>
+    </div>
+  </div>
+
+  <!-- Decorative only: a deck of job cards floating in 3D, tilting toward
+       the pointer. Pure CSS transforms — no library, no CDN, still works
+       offline — and it stops moving under prefers-reduced-motion. -->
+  <div class="deck-stage" id="deckStage" aria-hidden="true">
+    <div class="deck" id="deck">
+      <div class="card3d" style="--i:0; --edge:var(--viz-neutral)">
+        <span class="l1"></span><span class="l2"></span><span class="tag">discovered</span>
+      </div>
+      <div class="card3d" style="--i:1; --edge:var(--viz-warn)">
+        <span class="l1"></span><span class="l2"></span><span class="tag">scored</span>
+      </div>
+      <div class="card3d" style="--i:2; --edge:var(--viz-queued)">
+        <span class="l1"></span><span class="l2"></span><span class="tag">approved</span>
+      </div>
+      <div class="card3d" style="--i:3; --edge:var(--viz-done)">
+        <span class="l1"></span><span class="l2"></span><span class="tag">submitted</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- KPI row ----------------------------------------------------------- -->
+<div class="kpis">
+  <div class="kpi"><div class="v">{{ p.to_review }}</div><div class="k">Pending approval</div></div>
+  <div class="kpi"><div class="v">{{ p.queued }}</div><div class="k">Queued to apply</div></div>
+  <div class="kpi"><div class="v">{{ p.needs_you }}</div><div class="k">Needs your input</div></div>
+  <div class="kpi"><div class="v" style="color:var(--viz-done)">{{ p.submitted }}</div><div class="k">Submitted</div></div>
+</div>
+
+<!-- Pipeline donut ---------------------------------------------------- -->
+<div class="card">
+  <h2 style="margin-top:0">Where your jobs are</h2>
+  <p class="hint">
+    Every job currently in the pipeline. Closed-out jobs ({{ p.closed }} skipped
+    or failed) aren't shown.
+  </p>
+
+  {% if not p.active %}
+    <div class="empty">
+      <p>No jobs yet.</p>
+      <p>Head to <a href="/run">Run</a> and start with <strong>Run discover</strong>.</p>
+    </div>
+  {% else %}
+    <div class="chart-row">
+      <div class="donut-wrap">
+        <svg class="donut" viewBox="0 0 200 200" width="230" height="230"
+             role="img" aria-label="Pipeline breakdown; the same figures are listed beside the chart.">
+          <!-- Track, so a nearly-empty pipeline still reads as a ring -->
+          <circle cx="100" cy="100" r="70" fill="none"
+                  stroke="var(--chip)" stroke-width="28"/>
+          {% for s in p.segments %}
+            {% if s.value %}
+              <circle cx="100" cy="100" r="70" fill="none"
+                      stroke="{{ TONE[s.tone] }}" stroke-width="28"
+                      stroke-dasharray="{{ s.dash }} {{ s.gap_rest }}"
+                      stroke-dashoffset="{{ s.offset }}">
+                <title>{{ s.label }}: {{ s.value }} ({{ s.pct }}%)</title>
+              </circle>
+            {% endif %}
+          {% endfor %}
+        </svg>
+        <div class="donut-centre">
+          <div class="hero-figure">{{ p.active }}</div>
+          <div class="hero-label">jobs in play</div>
+        </div>
+      </div>
+
+      <!-- Legend doubles as the table view: identity is never colour alone. -->
+      <ul class="legend">
+        {% for s in p.segments %}
+          <li>
+            <span class="swatch" style="background:{{ TONE[s.tone] }}"></span>
+            <a href="{{ LINK[s.key] }}">{{ s.label }}</a>
+            <span class="n">{{ s.value }}</span>
+            <span class="pct">{{ s.pct }}%</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Best matches ------------------------------------------------------ -->
+{% if top %}
+  <div class="card">
+    <h2 style="margin-top:0">Best matches awaiting your decision</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th style="width:3.5rem">Score</th><th>Role</th><th style="width:9rem">Location</th></tr></thead>
+        <tbody>
+        {% for job in top %}
+          <tr>
+            <td class="score {{ 's-hi' if job.score.fit_score >= 80 else 's-mid' }}">{{ job.score.fit_score }}</td>
+            <td>
+              <div class="title"><a href="{{ job.url }}" target="_blank" rel="noopener">{{ job.title }}</a></div>
+              <div class="company">{{ job.company }}</div>
+            </td>
+            <td>{{ job.location or '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p style="margin:.8rem 0 0"><a href="/review">Review all →</a></p>
+  </div>
+{% endif %}
+
+<script>
+(function () {
+  // Parallax tilt on the card deck. Decorative, so it degrades to the static
+  // CSS transform if anything here doesn't apply.
+  var stage = document.getElementById('deckStage');
+  var deck = document.getElementById('deck');
+  if (!stage || !deck) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  stage.addEventListener('pointermove', function (e) {
+    var r = stage.getBoundingClientRect();
+    var x = (e.clientX - r.left) / r.width - 0.5;
+    var y = (e.clientY - r.top) / r.height - 0.5;
+    deck.style.setProperty('--ry', (-22 + x * 26).toFixed(1) + 'deg');
+    deck.style.setProperty('--rx', (14 - y * 20).toFixed(1) + 'deg');
+  });
+  stage.addEventListener('pointerleave', function () {
+    deck.style.setProperty('--ry', '-22deg');
+    deck.style.setProperty('--rx', '14deg');
+  });
+})();
+</script>
+{% endblock %}
