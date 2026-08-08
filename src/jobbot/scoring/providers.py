@@ -43,6 +43,17 @@ from .schema import FitScore
 #: drops to the next one.
 _MODES = ("json_schema", "json_object", "prompt")
 
+#: Parameters worth sending but not worth failing over. Support is
+#: inconsistent and disagreement is not graceful — OpenAI 400s on an
+#: unrecognised name rather than ignoring it (which is how `think` broke
+#: OpenAI outright), and its reasoning models reject `temperature: 0` because
+#: they only allow the default. Each is dropped permanently the first time an
+#: endpoint objects, so a run degrades instead of dying.
+#:
+#: `temperature` is here reluctantly: 0 is what keeps a posting from swinging
+#: ten points between runs. Models that refuse it leave no choice.
+_OPTIONAL_EXTRAS = {"temperature": 0, "think": False, "reasoning_effort": "low"}
+
 DEFAULT_READ_TIMEOUT = 600.0
 """Ten minutes. Measured, not guessed: a 9B reasoning model on a laptop took
 over five minutes for one posting at a 16k context. Connect stays short — a
@@ -116,6 +127,7 @@ class OpenAICompatScorer:
         # `max_completion_tokens`; everything else still wants the former.
         # Start compatible and swap once if the endpoint objects.
         self._token_field = "max_tokens"
+        self._extras = set(_OPTIONAL_EXTRAS)
         self._client = client or httpx.Client(timeout=_timeout(read_timeout))
 
     # ------------------------------------------------------------------
@@ -145,9 +157,6 @@ class OpenAICompatScorer:
                     ),
                 },
             ],
-            # Scoring wants consistency, not variety: the same posting should
-            # not swing ten points between runs.
-            "temperature": 0,
         }
 
         # Without an explicit ceiling the server picks its own, and local ones
@@ -156,13 +165,14 @@ class OpenAICompatScorer:
         # thinking, so it needs headroom rather than just enough for the JSON.
         payload[self._token_field] = MAX_TOKENS
 
-        # Turn reasoning off where the endpoint understands how. The schema is
-        # already constraining the answer, and on a local model the thinking is
-        # most of the wall clock — a 9B spent its entire output budget on it
-        # and returned an empty string. Servers that do not recognise these
-        # ignore them.
-        payload["think"] = False
-        payload["reasoning_effort"] = "low"
+        # Determinism, and reasoning off where the endpoint understands how:
+        # the schema already constrains the answer, and on a local model the
+        # thinking is most of the wall clock — a 9B spent its whole output
+        # budget on it and returned an empty string. Anything the endpoint
+        # objects to is dropped and remembered — see `_OPTIONAL_EXTRAS`.
+        for name, value in _OPTIONAL_EXTRAS.items():
+            if name in self._extras:
+                payload[name] = value
         if mode == "json_schema":
             payload["response_format"] = {
                 "type": "json_schema",
@@ -184,23 +194,52 @@ class OpenAICompatScorer:
             f"{self.base_url}/chat/completions", json=payload, headers=headers
         )
 
+    def _rejected_extra(self, response: httpx.Response) -> str | None:
+        """The name of an optional parameter the endpoint refused, if any.
+
+        OpenAI reports it as `error.param`; others only put it in the message.
+        Either way the fix is the same — drop it and try again.
+        """
+        if response.status_code != 400:
+            return None
+        try:
+            error = response.json().get("error") or {}
+        except ValueError:
+            error = {}
+        named = error.get("param")
+        if named in self._extras:
+            return named
+        for name in list(self._extras):
+            if f"'{name}'" in response.text or f'"{name}"' in response.text:
+                return name
+        return None
+
     def score_one(self, job: Job) -> ScoreResult:
         # Walk down the ladder, but only past rungs the endpoint rejects.
         for mode in _MODES[_MODES.index(self._mode) :]:
-            try:
-                response = self._post(self._payload(job, mode))
-            except httpx.ConnectError as exc:
-                return ScoreResult(
-                    job_id=job.id,
-                    error=f"could not reach {self.base_url} — is the server running? ({exc})",
-                )
-            except httpx.HTTPError as exc:
-                return ScoreResult(job_id=job.id, error=f"request failed: {exc}")
+            # Bounded: each pass either succeeds or permanently drops one
+            # optional parameter, and there are only a handful of those.
+            for _ in range(len(_OPTIONAL_EXTRAS) + 2):
+                try:
+                    response = self._post(self._payload(job, mode))
+                except httpx.ConnectError as exc:
+                    return ScoreResult(
+                        job_id=job.id,
+                        error=f"could not reach {self.base_url} — is the server running? ({exc})",
+                    )
+                except httpx.HTTPError as exc:
+                    return ScoreResult(job_id=job.id, error=f"request failed: {exc}")
 
-            if response.status_code == 400 and "max_completion_tokens" in response.text:
-                # Reasoning models on OpenAI: same request, different spelling.
-                self._token_field = "max_completion_tokens"
-                response = self._post(self._payload(job, mode))
+                if response.status_code == 400 and "max_completion_tokens" in response.text:
+                    # Reasoning models on OpenAI: same request, different spelling.
+                    self._token_field = "max_completion_tokens"
+                    continue
+
+                if rejected := self._rejected_extra(response):
+                    self._extras.discard(rejected)  # remembered for every later job
+                    continue
+
+                break
 
             if response.status_code == 400 and "response_format" in response.text:
                 self._mode = mode  # remember the failure so the next job skips it

@@ -24,7 +24,12 @@ import pytest
 from helpers import make_job
 
 from jobbot.config import ModelConfig
-from jobbot.scoring.providers import OpenAICompatScorer, _extract_json, build_scorer
+from jobbot.scoring.providers import (
+    _OPTIONAL_EXTRAS,
+    OpenAICompatScorer,
+    _extract_json,
+    build_scorer,
+)
 
 VALID_FIT = {
     "fit_score": 82,
@@ -427,3 +432,66 @@ def test_a_local_model_is_not_billed_at_cloud_rates():
     stats = ScoringStats(input_tokens=1_000_000, output_tokens=1_000_000)
     assert stats.estimated_cost_usd("llama3", "ollama") == 0.0
     assert stats.estimated_cost_usd("claude-opus-5", "anthropic") > 0
+
+
+def test_a_rejected_temperature_is_dropped_rather_than_failing_the_run():
+    """Found against a live gpt-5.x model: it allows only the default
+    temperature and 400s on 0. Determinism is worth asking for and not worth
+    dying over."""
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append("temperature" in body)
+        if "temperature" in body:
+            return httpx.Response(400, json={"error": {
+                "message": "Unsupported value: 'temperature' does not support 0 with this model.",
+                "type": "invalid_request_error", "param": "temperature"}})
+        return httpx.Response(200, json=completion(json.dumps(VALID_FIT)))
+
+    scorer = scorer_for(handler)
+    assert scorer.score_one(make_job()).ok
+    assert seen == [True, False]
+
+
+def test_an_unknown_parameter_is_dropped_and_stays_dropped():
+    """OpenAI 400s on an unrecognised parameter rather than ignoring it, which
+    is how `think` — added for Ollama — broke OpenAI outright."""
+    sent = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        sent.append(sorted(k for k in body if k in ("think", "reasoning_effort", "temperature")))
+        if "think" in body:
+            return httpx.Response(400, json={"error": {
+                "message": "Unknown parameter: 'think'.",
+                "type": "invalid_request_error",
+                "param": "think", "code": "unknown_parameter"}})
+        return httpx.Response(200, json=completion(json.dumps(VALID_FIT)))
+
+    scorer = scorer_for(handler)
+    assert scorer.score_one(make_job(1)).ok
+    assert scorer.score_one(make_job(2)).ok
+    assert "think" not in scorer._extras
+    # The second job must not relearn it.
+    assert all("think" not in call for call in sent[1:])
+
+
+def test_dropping_extras_terminates_even_if_everything_is_rejected():
+    """A server that refuses every optional parameter must still get an
+    answer or a clean error — never an unbounded retry loop."""
+    calls = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        calls.append(1)
+        for name in ("temperature", "think", "reasoning_effort"):
+            if name in body:
+                return httpx.Response(400, json={"error": {
+                    "message": f"Unknown parameter: '{name}'.", "param": name}})
+        return httpx.Response(200, json=completion(json.dumps(VALID_FIT)))
+
+    scorer = scorer_for(handler)
+    assert scorer.score_one(make_job()).ok
+    assert len(calls) <= len(_OPTIONAL_EXTRAS) + 2
+    assert scorer._extras == set()
